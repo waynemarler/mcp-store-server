@@ -1,5 +1,11 @@
-import { kv } from '@vercel/kv';
+import { createClient } from '@vercel/kv';
 import type { MCPServerMetadata, DiscoveryQuery, HealthStatus } from '@/lib/types';
+
+// Create KV client with environment variable fallback
+const kv = createClient({
+  url: process.env.KV_REST_API_URL || process.env.mcp_KV_REST_API_URL || '',
+  token: process.env.KV_REST_API_TOKEN || process.env.mcp_KV_REST_API_TOKEN || '',
+});
 
 export class RegistryStore {
   private readonly REGISTRY_KEY = 'mcp:registry:servers';
@@ -10,8 +16,18 @@ export class RegistryStore {
   // For local development without Vercel KV, use in-memory storage
   private inMemoryStore: Map<string, MCPServerMetadata> = new Map();
   private get useInMemory(): boolean {
-    // Force Redis usage in production (Vercel) environment
-    return !process.env.KV_REST_API_URL && !process.env.KV_URL && !process.env.VERCEL;
+    // Check for KV environment variables with or without mcp_ prefix
+    const kvUrl = process.env.KV_REST_API_URL || process.env.mcp_KV_REST_API_URL;
+    const kvToken = process.env.KV_REST_API_TOKEN || process.env.mcp_KV_REST_API_TOKEN;
+    const hasKvEnvVars = !!(kvUrl && kvToken);
+
+    console.log('KV Environment check:', {
+      hasKvUrl: !!kvUrl,
+      hasKvToken: !!kvToken,
+      hasVercel: !!process.env.VERCEL,
+      useInMemory: !hasKvEnvVars
+    });
+    return !hasKvEnvVars;
   }
 
   async register(server: MCPServerMetadata): Promise<void> {

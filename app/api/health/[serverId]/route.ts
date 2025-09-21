@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
 import { registry } from '@/lib/registry/store';
 
+// Health check endpoints for MCP servers
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ serverId: string }> }

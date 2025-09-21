@@ -1,49 +1,24 @@
-import { createClient } from '@vercel/kv';
 import type { MCPServerMetadata, DiscoveryQuery, HealthStatus } from '@/lib/types';
-
-// Create KV client with fallback to Upstash variables
-const kvUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || '';
-const kvToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '';
-
-console.log('KV Client Setup:', {
-  hasStandardUrl: !!process.env.KV_REST_API_URL,
-  hasStandardToken: !!process.env.KV_REST_API_TOKEN,
-  hasUpstashUrl: !!process.env.UPSTASH_REDIS_REST_URL,
-  hasUpstashToken: !!process.env.UPSTASH_REDIS_REST_TOKEN,
-  usingUrl: kvUrl ? 'present' : 'missing',
-  usingToken: kvToken ? 'present' : 'missing',
-  urlSource: process.env.KV_REST_API_URL ? 'standard' : 'upstash'
-});
-
-const kv = createClient({
-  url: kvUrl,
-  token: kvToken,
-});
+import { PostgresRegistryStore } from './postgres-store';
 
 export class RegistryStore {
-  private readonly REGISTRY_KEY = 'mcp:registry:servers';
-  private readonly CAPABILITY_INDEX = 'mcp:capability:';
-  private readonly CATEGORY_INDEX = 'mcp:category:';
-  private readonly HEALTH_KEY = 'mcp:health:';
-
-  // For local development without Vercel KV, use in-memory storage
+  private postgresStore: PostgresRegistryStore;
   private inMemoryStore: Map<string, MCPServerMetadata> = new Map();
-  private get useInMemory(): boolean {
-    // Use Redis if environment variables are available
-    const hasKvEnvVars = !!(
-      (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL) &&
-      (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN)
-    );
 
-    console.log('KV Environment check:', {
-      hasStandardKv: !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN),
-      hasUpstashKv: !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN),
-      useInMemory: !hasKvEnvVars
+  constructor() {
+    this.postgresStore = new PostgresRegistryStore();
+  }
+
+  private get useInMemory(): boolean {
+    // Use Postgres if environment variable is available
+    const hasPostgresEnv = !!process.env.POSTGRES_URL;
+
+    console.log('Storage Environment check:', {
+      hasPostgres: hasPostgresEnv,
+      useInMemory: !hasPostgresEnv
     });
 
-    // Temporarily use in-memory until Redis is resolved
-    return true;
-    // return !hasKvEnvVars;
+    return !hasPostgresEnv;
   }
 
   async register(server: MCPServerMetadata): Promise<void> {
@@ -53,34 +28,8 @@ export class RegistryStore {
       return;
     }
 
-    try {
-      console.log('Registering server in Redis:', server.id);
-
-      // Store server metadata
-      await kv.hset(this.REGISTRY_KEY, { [server.id]: JSON.stringify(server) });
-      console.log('Server metadata stored successfully');
-
-      // Index by capability - create separate promises for better error handling
-      const capabilityPromises = server.capabilities.map(capability => {
-        console.log('Indexing capability:', capability);
-        return kv.sadd(`${this.CAPABILITY_INDEX}${capability}`, server.id);
-      });
-
-      // Index by category
-      console.log('Indexing category:', server.category);
-      const categoryPromise = kv.sadd(`${this.CATEGORY_INDEX}${server.category}`, server.id);
-
-      // Execute all indexing operations
-      await Promise.all([...capabilityPromises, categoryPromise]);
-      console.log('All indexing operations completed successfully');
-    } catch (error: any) {
-      console.error('Redis registration error:', {
-        error: error.message,
-        serverId: server.id,
-        operation: 'register'
-      });
-      throw error;
-    }
+    // Use Postgres storage
+    return this.postgresStore.register(server);
   }
 
   async get(serverId: string): Promise<MCPServerMetadata | null> {
@@ -88,8 +37,7 @@ export class RegistryStore {
       return this.inMemoryStore.get(serverId) || null;
     }
 
-    const data = await kv.hget(this.REGISTRY_KEY, serverId);
-    return data ? JSON.parse(data as string) : null;
+    return this.postgresStore.get(serverId);
   }
 
   async discover(query: DiscoveryQuery): Promise<MCPServerMetadata[]> {
@@ -104,59 +52,20 @@ export class RegistryStore {
         }
       }
       return servers.sort((a, b) => b.trustScore - a.trustScore);
-    } else {
-      // KV-based filtering
-      let serverIds: Set<string> = new Set();
-
-      if (query.capability) {
-        console.log('Searching for capability:', query.capability);
-        const capabilityKey = `${this.CAPABILITY_INDEX}${query.capability}`;
-        console.log('Capability key:', capabilityKey);
-        const ids = await kv.smembers(capabilityKey);
-        console.log('Found capability IDs:', ids);
-        ids.forEach(id => serverIds.add(id as string));
-      } else if (query.category) {
-        console.log('Searching for category:', query.category);
-        const categoryKey = `${this.CATEGORY_INDEX}${query.category}`;
-        const ids = await kv.smembers(categoryKey);
-        console.log('Found category IDs:', ids);
-        ids.forEach(id => serverIds.add(id as string));
-      } else {
-        // Get all servers
-        const allServers = await kv.hgetall(this.REGISTRY_KEY);
-        if (allServers) {
-          serverIds = new Set(Object.keys(allServers));
-        }
-      }
-
-      console.log('Server IDs to fetch:', Array.from(serverIds));
-
-      // Fetch metadata for each server
-      const servers: MCPServerMetadata[] = [];
-      for (const id of serverIds) {
-        const server = await this.get(id);
-        if (server && this.matchesQuery(server, query)) {
-          servers.push(server);
-        }
-      }
-
-      console.log('Final servers found:', servers.length);
-      // Sort by trust score
-      return servers.sort((a, b) => b.trustScore - a.trustScore);
     }
+
+    // Use Postgres storage
+    return this.postgresStore.discover(query);
   }
 
   async updateHealth(serverId: string, status: HealthStatus): Promise<void> {
-    const server = await this.get(serverId);
-    if (!server) return;
-
-    server.lastHealthCheck = status.lastCheck;
-
     if (this.useInMemory) {
+      const server = this.inMemoryStore.get(serverId);
+      if (!server) return;
+      server.lastHealthCheck = status.lastCheck;
       this.inMemoryStore.set(serverId, server);
     } else {
-      await kv.hset(this.REGISTRY_KEY, { [serverId]: JSON.stringify(server) });
-      await kv.setex(`${this.HEALTH_KEY}${serverId}`, 300, JSON.stringify(status));
+      return this.postgresStore.updateHealth(serverId, status);
     }
   }
 
@@ -171,8 +80,7 @@ export class RegistryStore {
       };
     }
 
-    const data = await kv.get(`${this.HEALTH_KEY}${serverId}`);
-    return data ? JSON.parse(data as string) : null;
+    return this.postgresStore.getHealth(serverId);
   }
 
   async getAllServers(): Promise<MCPServerMetadata[]> {
@@ -180,29 +88,14 @@ export class RegistryStore {
       return Array.from(this.inMemoryStore.values());
     }
 
-    const allServers = await kv.hgetall(this.REGISTRY_KEY);
-    if (!allServers) return [];
-
-    return Object.values(allServers).map(data =>
-      JSON.parse(data as string)
-    );
+    return this.postgresStore.getAllServers();
   }
 
   async delete(serverId: string): Promise<void> {
-    const server = await this.get(serverId);
-    if (!server) return;
-
     if (this.useInMemory) {
       this.inMemoryStore.delete(serverId);
     } else {
-      await kv.hdel(this.REGISTRY_KEY, serverId);
-
-      // Remove from indices
-      for (const capability of server.capabilities) {
-        await kv.srem(`${this.CAPABILITY_INDEX}${capability}`, serverId);
-      }
-      await kv.srem(`${this.CATEGORY_INDEX}${server.category}`, serverId);
-      await kv.del(`${this.HEALTH_KEY}${serverId}`);
+      return this.postgresStore.delete(serverId);
     }
   }
 

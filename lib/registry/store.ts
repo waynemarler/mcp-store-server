@@ -1,5 +1,11 @@
-import { kv } from '@vercel/kv';
+import { createClient } from '@vercel/kv';
 import type { MCPServerMetadata, DiscoveryQuery, HealthStatus } from '@/lib/types';
+
+// Create KV client with fallback to Upstash variables
+const kv = createClient({
+  url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || '',
+  token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '',
+});
 
 export class RegistryStore {
   private readonly REGISTRY_KEY = 'mcp:registry:servers';
@@ -10,10 +16,19 @@ export class RegistryStore {
   // For local development without Vercel KV, use in-memory storage
   private inMemoryStore: Map<string, MCPServerMetadata> = new Map();
   private get useInMemory(): boolean {
-    // Temporarily use in-memory storage to test capability indexing
-    // while Redis authentication issue is being resolved
-    console.log('Using in-memory storage for testing capability indexing');
-    return true;
+    // Use Redis if environment variables are available
+    const hasKvEnvVars = !!(
+      (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL) &&
+      (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN)
+    );
+
+    console.log('KV Environment check:', {
+      hasStandardKv: !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN),
+      hasUpstashKv: !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN),
+      useInMemory: !hasKvEnvVars
+    });
+
+    return !hasKvEnvVars;
   }
 
   async register(server: MCPServerMetadata): Promise<void> {

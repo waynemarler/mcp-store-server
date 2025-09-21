@@ -1,0 +1,20 @@
+{
+  "functions": {
+    "app/api/mcp/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/registry/route.ts": {
+      "maxDuration": 10
+    },
+    "app/api/discovery/route.ts": {
+      "maxDuration": 10
+    },
+    "app/api/health/[serverId]/route.ts": {
+      "maxDuration": 10
+    }
+  },
+  "env": {
+    "KV_REST_API_URL": "@kv-rest-api-url",
+    "KV_REST_API_TOKEN": "@kv-rest-api-token"
+  }
+}

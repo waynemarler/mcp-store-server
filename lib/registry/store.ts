@@ -1,11 +1,19 @@
-import { createClient } from '@vercel/kv';
+import { kv as defaultKv, createClient } from '@vercel/kv';
 import type { MCPServerMetadata, DiscoveryQuery, HealthStatus } from '@/lib/types';
 
-// Create KV client with environment variable fallback
-const kv = createClient({
-  url: process.env.KV_REST_API_URL || process.env.mcp_KV_REST_API_URL || '',
-  token: process.env.KV_REST_API_TOKEN || process.env.mcp_KV_REST_API_TOKEN || '',
-});
+// Try default KV first, then fallback to custom client with prefixed env vars
+let kv = defaultKv;
+
+// If default doesn't work, try custom client with prefixed variables
+if (process.env.mcp_KV_REST_API_URL && process.env.mcp_KV_REST_API_TOKEN) {
+  kv = createClient({
+    url: process.env.mcp_KV_REST_API_URL,
+    token: process.env.mcp_KV_REST_API_TOKEN,
+  });
+  console.log('Using custom KV client with mcp_ prefixed variables');
+} else {
+  console.log('Using default KV client');
+}
 
 export class RegistryStore {
   private readonly REGISTRY_KEY = 'mcp:registry:servers';

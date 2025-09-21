@@ -9,7 +9,10 @@ export class RegistryStore {
 
   // For local development without Vercel KV, use in-memory storage
   private inMemoryStore: Map<string, MCPServerMetadata> = new Map();
-  private useInMemory = !process.env.KV_REST_API_URL;
+  private get useInMemory(): boolean {
+    // Force Redis usage in production (Vercel) environment
+    return !process.env.KV_REST_API_URL && !process.env.KV_URL && !process.env.VERCEL;
+  }
 
   async register(server: MCPServerMetadata): Promise<void> {
     if (this.useInMemory) {

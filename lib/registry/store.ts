@@ -2,9 +2,22 @@ import { createClient } from '@vercel/kv';
 import type { MCPServerMetadata, DiscoveryQuery, HealthStatus } from '@/lib/types';
 
 // Create KV client with fallback to Upstash variables
+const kvUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || '';
+const kvToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '';
+
+console.log('KV Client Setup:', {
+  hasStandardUrl: !!process.env.KV_REST_API_URL,
+  hasStandardToken: !!process.env.KV_REST_API_TOKEN,
+  hasUpstashUrl: !!process.env.UPSTASH_REDIS_REST_URL,
+  hasUpstashToken: !!process.env.UPSTASH_REDIS_REST_TOKEN,
+  usingUrl: kvUrl ? 'present' : 'missing',
+  usingToken: kvToken ? 'present' : 'missing',
+  urlSource: process.env.KV_REST_API_URL ? 'standard' : 'upstash'
+});
+
 const kv = createClient({
-  url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || '',
-  token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '',
+  url: kvUrl,
+  token: kvToken,
 });
 
 export class RegistryStore {
@@ -33,23 +46,39 @@ export class RegistryStore {
 
   async register(server: MCPServerMetadata): Promise<void> {
     if (this.useInMemory) {
+      console.log('Registering server in memory:', server.id);
       this.inMemoryStore.set(server.id, server);
       return;
     }
 
-    // Store server metadata
-    await kv.hset(this.REGISTRY_KEY, { [server.id]: JSON.stringify(server) });
+    try {
+      console.log('Registering server in Redis:', server.id);
 
-    // Index by capability - create separate promises for better error handling
-    const capabilityPromises = server.capabilities.map(capability =>
-      kv.sadd(`${this.CAPABILITY_INDEX}${capability}`, server.id)
-    );
+      // Store server metadata
+      await kv.hset(this.REGISTRY_KEY, { [server.id]: JSON.stringify(server) });
+      console.log('Server metadata stored successfully');
 
-    // Index by category
-    const categoryPromise = kv.sadd(`${this.CATEGORY_INDEX}${server.category}`, server.id);
+      // Index by capability - create separate promises for better error handling
+      const capabilityPromises = server.capabilities.map(capability => {
+        console.log('Indexing capability:', capability);
+        return kv.sadd(`${this.CAPABILITY_INDEX}${capability}`, server.id);
+      });
 
-    // Execute all indexing operations
-    await Promise.all([...capabilityPromises, categoryPromise]);
+      // Index by category
+      console.log('Indexing category:', server.category);
+      const categoryPromise = kv.sadd(`${this.CATEGORY_INDEX}${server.category}`, server.id);
+
+      // Execute all indexing operations
+      await Promise.all([...capabilityPromises, categoryPromise]);
+      console.log('All indexing operations completed successfully');
+    } catch (error: any) {
+      console.error('Redis registration error:', {
+        error: error.message,
+        serverId: server.id,
+        operation: 'register'
+      });
+      throw error;
+    }
   }
 
   async get(serverId: string): Promise<MCPServerMetadata | null> {

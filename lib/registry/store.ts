@@ -1,19 +1,5 @@
-import { kv as defaultKv, createClient } from '@vercel/kv';
+import { kv } from '@vercel/kv';
 import type { MCPServerMetadata, DiscoveryQuery, HealthStatus } from '@/lib/types';
-
-// Try default KV first, then fallback to custom client with prefixed env vars
-let kv = defaultKv;
-
-// If default doesn't work, try custom client with prefixed variables
-if (process.env.mcp_KV_REST_API_URL && process.env.mcp_KV_REST_API_TOKEN) {
-  kv = createClient({
-    url: process.env.mcp_KV_REST_API_URL,
-    token: process.env.mcp_KV_REST_API_TOKEN,
-  });
-  console.log('Using custom KV client with mcp_ prefixed variables');
-} else {
-  console.log('Using default KV client');
-}
 
 export class RegistryStore {
   private readonly REGISTRY_KEY = 'mcp:registry:servers';
@@ -24,15 +10,11 @@ export class RegistryStore {
   // For local development without Vercel KV, use in-memory storage
   private inMemoryStore: Map<string, MCPServerMetadata> = new Map();
   private get useInMemory(): boolean {
-    // Check for KV environment variables with or without mcp_ prefix
-    const kvUrl = process.env.KV_REST_API_URL || process.env.mcp_KV_REST_API_URL;
-    const kvToken = process.env.KV_REST_API_TOKEN || process.env.mcp_KV_REST_API_TOKEN;
-    const hasKvEnvVars = !!(kvUrl && kvToken);
-
+    // Use Redis if environment variables are available
+    const hasKvEnvVars = !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
     console.log('KV Environment check:', {
-      hasKvUrl: !!kvUrl,
-      hasKvToken: !!kvToken,
-      hasVercel: !!process.env.VERCEL,
+      hasKvUrl: !!process.env.KV_REST_API_URL,
+      hasKvToken: !!process.env.KV_REST_API_TOKEN,
       useInMemory: !hasKvEnvVars
     });
     return !hasKvEnvVars;

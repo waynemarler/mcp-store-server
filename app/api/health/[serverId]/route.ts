@@ -3,10 +3,10 @@ import { registry } from '@/lib/registry/store';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { serverId: string } }
+  { params }: { params: Promise<{ serverId: string }> }
 ) {
   try {
-    const serverId = params.serverId;
+    const { serverId } = await params;
     const health = await registry.getHealth(serverId);
 
     if (!health) {
@@ -21,10 +21,10 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { serverId: string } }
+  { params }: { params: Promise<{ serverId: string }> }
 ) {
   try {
-    const serverId = params.serverId;
+    const { serverId } = await params;
     const server = await registry.get(serverId);
 
     if (!server) {

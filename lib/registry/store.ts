@@ -17,7 +17,7 @@ export class RegistryStore {
       return;
     }
 
-    await kv.hset(this.REGISTRY_KEY, server.id, JSON.stringify(server));
+    await kv.hset(this.REGISTRY_KEY, { [server.id]: JSON.stringify(server) });
 
     // Index by capability
     for (const capability of server.capabilities) {
@@ -88,10 +88,8 @@ export class RegistryStore {
     if (this.useInMemory) {
       this.inMemoryStore.set(serverId, server);
     } else {
-      await kv.hset(this.REGISTRY_KEY, serverId, JSON.stringify(server));
-      await kv.set(`${this.HEALTH_KEY}${serverId}`, JSON.stringify(status), {
-        ex: 300 // Expire after 5 minutes
-      });
+      await kv.hset(this.REGISTRY_KEY, { [serverId]: JSON.stringify(server) });
+      await kv.setex(`${this.HEALTH_KEY}${serverId}`, 300, JSON.stringify(status));
     }
   }
 

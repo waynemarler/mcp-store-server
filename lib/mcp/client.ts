@@ -26,18 +26,9 @@ export class MCPClient {
       }
     );
 
-    // Create SSE transport with authentication if needed
-    const headers: Record<string, string> = {
-      'Content-Type': 'text/event-stream'
-    };
-
-    if (server.apiKey) {
-      headers['Authorization'] = `Bearer ${server.apiKey}`;
-    }
-
+    // Create SSE transport
     const transport = new SSEClientTransport(
-      new URL(server.endpoint),
-      { headers }
+      new URL(server.endpoint)
     );
 
     await client.connect(transport);

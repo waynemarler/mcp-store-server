@@ -41,7 +41,9 @@ export class RegistryStore {
       useInMemory: !hasKvEnvVars
     });
 
-    return !hasKvEnvVars;
+    // Temporarily use in-memory until Redis is resolved
+    return true;
+    // return !hasKvEnvVars;
   }
 
   async register(server: MCPServerMetadata): Promise<void> {

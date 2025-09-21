@@ -17,15 +17,19 @@ export class RegistryStore {
       return;
     }
 
+    // Store server metadata
     await kv.hset(this.REGISTRY_KEY, { [server.id]: JSON.stringify(server) });
 
-    // Index by capability
-    for (const capability of server.capabilities) {
-      await kv.sadd(`${this.CAPABILITY_INDEX}${capability}`, server.id);
-    }
+    // Index by capability - create separate promises for better error handling
+    const capabilityPromises = server.capabilities.map(capability =>
+      kv.sadd(`${this.CAPABILITY_INDEX}${capability}`, server.id)
+    );
 
     // Index by category
-    await kv.sadd(`${this.CATEGORY_INDEX}${server.category}`, server.id);
+    const categoryPromise = kv.sadd(`${this.CATEGORY_INDEX}${server.category}`, server.id);
+
+    // Execute all indexing operations
+    await Promise.all([...capabilityPromises, categoryPromise]);
   }
 
   async get(serverId: string): Promise<MCPServerMetadata | null> {
@@ -38,6 +42,8 @@ export class RegistryStore {
   }
 
   async discover(query: DiscoveryQuery): Promise<MCPServerMetadata[]> {
+    console.log('Discovery query:', query, 'useInMemory:', this.useInMemory);
+
     if (this.useInMemory) {
       // In-memory filtering
       const servers: MCPServerMetadata[] = [];
@@ -52,10 +58,17 @@ export class RegistryStore {
       let serverIds: Set<string> = new Set();
 
       if (query.capability) {
-        const ids = await kv.smembers(`${this.CAPABILITY_INDEX}${query.capability}`);
+        console.log('Searching for capability:', query.capability);
+        const capabilityKey = `${this.CAPABILITY_INDEX}${query.capability}`;
+        console.log('Capability key:', capabilityKey);
+        const ids = await kv.smembers(capabilityKey);
+        console.log('Found capability IDs:', ids);
         ids.forEach(id => serverIds.add(id as string));
       } else if (query.category) {
-        const ids = await kv.smembers(`${this.CATEGORY_INDEX}${query.category}`);
+        console.log('Searching for category:', query.category);
+        const categoryKey = `${this.CATEGORY_INDEX}${query.category}`;
+        const ids = await kv.smembers(categoryKey);
+        console.log('Found category IDs:', ids);
         ids.forEach(id => serverIds.add(id as string));
       } else {
         // Get all servers
@@ -64,6 +77,8 @@ export class RegistryStore {
           serverIds = new Set(Object.keys(allServers));
         }
       }
+
+      console.log('Server IDs to fetch:', Array.from(serverIds));
 
       // Fetch metadata for each server
       const servers: MCPServerMetadata[] = [];
@@ -74,6 +89,7 @@ export class RegistryStore {
         }
       }
 
+      console.log('Final servers found:', servers.length);
       // Sort by trust score
       return servers.sort((a, b) => b.trustScore - a.trustScore);
     }

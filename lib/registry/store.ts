@@ -10,14 +10,10 @@ export class RegistryStore {
   // For local development without Vercel KV, use in-memory storage
   private inMemoryStore: Map<string, MCPServerMetadata> = new Map();
   private get useInMemory(): boolean {
-    // Use Redis if environment variables are available
-    const hasKvEnvVars = !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
-    console.log('KV Environment check:', {
-      hasKvUrl: !!process.env.KV_REST_API_URL,
-      hasKvToken: !!process.env.KV_REST_API_TOKEN,
-      useInMemory: !hasKvEnvVars
-    });
-    return !hasKvEnvVars;
+    // Temporarily use in-memory storage to test capability indexing
+    // while Redis authentication issue is being resolved
+    console.log('Using in-memory storage for testing capability indexing');
+    return true;
   }
 
   async register(server: MCPServerMetadata): Promise<void> {

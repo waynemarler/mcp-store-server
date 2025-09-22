@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { registry } from '@/lib/registry/store';
 import { mcpClient } from '@/lib/mcp/client';
-import type { RouteRequest, RouteResponse } from '@/lib/types';
+import type { RouteRequest, RouteResponse, PartialAuthor } from '@/lib/types';
 
 // Schema for tool inputs
 const DiscoverServicesSchema = z.object({
@@ -203,6 +203,7 @@ async function handleMCPMessage(message: any) {
             const newServer = {
               id: `server-${Date.now()}`,
               ...registerData,
+              author: registerData.author as PartialAuthor | undefined,
               verified: registerData.verified ?? false,
               trustScore: registerData.trustScore ?? 50,
               status: registerData.status ?? 'active',
@@ -301,6 +302,7 @@ async function handleDirectAPI(body: any) {
         const server = {
           id: `server-${Date.now()}`,
           ...data,
+          author: data.author as PartialAuthor | undefined,
           verified: false,
           trustScore: 50,
           createdAt: new Date(),

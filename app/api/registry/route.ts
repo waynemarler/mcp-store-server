@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { registry } from '@/lib/registry/store';
 import { z } from 'zod';
+import type { PartialAuthor } from '@/lib/types';
 
 const RegisterSchema = z.object({
   name: z.string(),
@@ -58,6 +59,7 @@ export async function POST(request: NextRequest) {
     const server = {
       id: `server-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       ...validated,
+      author: validated.author as PartialAuthor | undefined,
       verified: validated.verified ?? false,
       trustScore: validated.trustScore ?? 50,
       status: validated.status ?? 'active',

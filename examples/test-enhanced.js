@@ -25,6 +25,31 @@ async function callJsonRpc(method, params = {}) {
   return result.result;
 }
 
+// Utility function for MCP tool calls
+async function callMcpTool(toolName, args = {}) {
+  const response = await fetch(`${BASE_URL}/api/mcp`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: {
+        name: toolName,
+        arguments: args
+      },
+      id: Date.now()
+    })
+  });
+
+  const result = await response.json();
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+  return result.result;
+}
+
 // Test enhanced registration with full metadata
 async function testEnhancedRegistration() {
   console.log('\n=== Testing Enhanced Registration ===\n');
@@ -113,15 +138,15 @@ async function testEnhancedRegistration() {
   try {
     // Register servers
     console.log('Registering Weather Service...');
-    await callJsonRpc('register_server', weatherServer);
+    await callMcpTool('register_server', weatherServer);
     console.log('✓ Weather Service registered');
 
     console.log('Registering Analytics Engine...');
-    await callJsonRpc('register_server', analyticsServer);
+    await callMcpTool('register_server', analyticsServer);
     console.log('✓ Analytics Engine registered');
 
     console.log('Registering Database Manager...');
-    await callJsonRpc('register_server', dbServer);
+    await callMcpTool('register_server', dbServer);
     console.log('✓ Database Manager registered');
 
     return true;
@@ -138,11 +163,12 @@ async function testEnhancedDiscovery() {
   try {
     // Test 1: Discover by capability
     console.log('1. Discovering services with data.query capability:');
-    const dataServices = await callJsonRpc('discover_services', {
+    const dataServices = await callMcpTool('discover_services', {
       capability: 'data.query'
     });
-    console.log(`   Found ${dataServices.length} services:`);
-    dataServices.forEach(s => {
+    const servers = JSON.parse(dataServices.content[0].text);
+    console.log(`   Found ${servers.length} services:`);
+    servers.forEach(s => {
       console.log(`   - ${s.name} (${s.id})`);
       if (s.categories) {
         console.log(`     Categories: ${s.categories.map(c => `${c.mainCategory}/${c.subCategory}`).join(', ')}`);
@@ -155,9 +181,10 @@ async function testEnhancedDiscovery() {
 
     // Test 2: Discover by category
     console.log('\n2. Discovering services in Tools category:');
-    const toolServices = await callJsonRpc('discover_services', {
+    const toolServicesResult = await callMcpTool('discover_services', {
       category: 'Tools'
     });
+    const toolServices = JSON.parse(toolServicesResult.content[0].text);
     console.log(`   Found ${toolServices.length} services:`);
     toolServices.forEach(s => {
       console.log(`   - ${s.name} (Trust Score: ${s.trustScore})`);
@@ -168,9 +195,10 @@ async function testEnhancedDiscovery() {
 
     // Test 3: Discover verified services
     console.log('\n3. Discovering verified services:');
-    const verifiedServices = await callJsonRpc('discover_services', {
+    const verifiedServicesResult = await callMcpTool('discover_services', {
       verified: true
     });
+    const verifiedServices = JSON.parse(verifiedServicesResult.content[0].text);
     console.log(`   Found ${verifiedServices.length} verified services:`);
     verifiedServices.forEach(s => {
       console.log(`   - ${s.name} (Version: ${s.version || 'N/A'})`);
@@ -179,7 +207,8 @@ async function testEnhancedDiscovery() {
 
     // Test 4: List all services
     console.log('\n4. Listing all registered services:');
-    const allServices = await callJsonRpc('list_all_servers');
+    const allServicesResult = await callMcpTool('list_all_servers');
+    const allServices = JSON.parse(allServicesResult.content[0].text);
     console.log(`   Total services: ${allServices.length}`);
     allServices.forEach(s => {
       console.log(`   - ${s.name}`);
@@ -208,7 +237,7 @@ async function testEnhancedRouting() {
   try {
     // Route to weather service
     console.log('Routing request to weather service...');
-    const weatherResult = await callJsonRpc('route_request', {
+    const weatherResult = await callMcpTool('route_request', {
       capability: 'weather.current',
       method: 'get_current_weather',
       params: { location: 'San Francisco' }

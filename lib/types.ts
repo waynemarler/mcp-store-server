@@ -28,7 +28,7 @@ export interface MCPServerMetadata {
   apiKey?: string;
   type?: 'informational' | 'transactional' | 'task';
   version?: string;
-  author?: Author | PartialAuthor;
+  author?: any;
   authorId?: number;
   // Legacy field for backward compatibility
   category: string;

@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     const server = {
       id: `server-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       ...validated,
-      author: validated.author as PartialAuthor | undefined,
+      author: validated.author,
       verified: validated.verified ?? false,
       trustScore: validated.trustScore ?? 50,
       status: validated.status ?? 'active',

@@ -203,7 +203,7 @@ async function handleMCPMessage(message: any) {
             const newServer = {
               id: `server-${Date.now()}`,
               ...registerData,
-              author: registerData.author as PartialAuthor | undefined,
+              author: registerData.author,
               verified: registerData.verified ?? false,
               trustScore: registerData.trustScore ?? 50,
               status: registerData.status ?? 'active',
@@ -302,7 +302,7 @@ async function handleDirectAPI(body: any) {
         const server = {
           id: `server-${Date.now()}`,
           ...data,
-          author: data.author as PartialAuthor | undefined,
+          author: data.author,
           verified: false,
           trustScore: 50,
           createdAt: new Date(),

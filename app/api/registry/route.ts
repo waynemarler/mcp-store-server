@@ -5,10 +5,27 @@ import { z } from 'zod';
 const RegisterSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
-  category: z.string(),
+  category: z.string().optional(),
+  categories: z.array(z.object({
+    mainCategory: z.string(),
+    subCategory: z.string(),
+    description: z.string().optional()
+  })).optional(),
   capabilities: z.array(z.string()),
   endpoint: z.string().url(),
-  apiKey: z.string().optional()
+  apiKey: z.string().optional(),
+  type: z.enum(['informational', 'transactional', 'task']).optional(),
+  version: z.string().optional(),
+  author: z.object({
+    name: z.string(),
+    website: z.string().optional(),
+    contactEmail: z.string().optional()
+  }).optional(),
+  tags: z.array(z.string()).optional(),
+  verified: z.boolean().optional(),
+  trustScore: z.number().min(0).max(100).optional(),
+  status: z.enum(['active', 'inactive', 'deprecated']).optional(),
+  logoUrl: z.string().url().optional()
 });
 
 export async function GET(request: NextRequest) {
@@ -19,7 +36,8 @@ export async function GET(request: NextRequest) {
         id: s.id,
         name: s.name,
         description: s.description,
-        category: s.category,
+        category: s.categories?.[0] ? `${s.categories[0].mainCategory}/${s.categories[0].subCategory}` : (s as any).category,
+        categories: s.categories,
         capabilities: s.capabilities,
         endpoint: s.endpoint,
         verified: s.verified,
@@ -40,8 +58,9 @@ export async function POST(request: NextRequest) {
     const server = {
       id: `server-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       ...validated,
-      verified: false,
-      trustScore: 50,
+      verified: validated.verified ?? false,
+      trustScore: validated.trustScore ?? 50,
+      status: validated.status ?? 'active',
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -53,7 +72,8 @@ export async function POST(request: NextRequest) {
       server: {
         id: server.id,
         name: server.name,
-        category: server.category,
+        category: server.categories?.[0] ? `${server.categories[0].mainCategory}/${server.categories[0].subCategory}` : (server as any).category,
+        categories: server.categories,
         capabilities: server.capabilities
       }
     });

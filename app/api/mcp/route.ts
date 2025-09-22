@@ -21,10 +21,27 @@ const RouteRequestSchema = z.object({
 const RegisterServerSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
-  category: z.string(),
+  category: z.string().optional(),
+  categories: z.array(z.object({
+    mainCategory: z.string(),
+    subCategory: z.string(),
+    description: z.string().optional()
+  })).optional(),
   capabilities: z.array(z.string()),
   endpoint: z.string().url(),
-  apiKey: z.string().optional()
+  apiKey: z.string().optional(),
+  type: z.enum(['informational', 'transactional', 'task']).optional(),
+  version: z.string().optional(),
+  author: z.object({
+    name: z.string(),
+    website: z.string().optional(),
+    contactEmail: z.string().optional()
+  }).optional(),
+  tags: z.array(z.string()).optional(),
+  verified: z.boolean().optional(),
+  trustScore: z.number().min(0).max(100).optional(),
+  status: z.enum(['active', 'inactive', 'deprecated']).optional(),
+  logoUrl: z.string().url().optional()
 });
 
 export async function POST(request: NextRequest) {
@@ -86,9 +103,35 @@ async function handleMCPMessage(message: any) {
                     name: { type: 'string' },
                     description: { type: 'string' },
                     category: { type: 'string' },
+                    categories: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          mainCategory: { type: 'string' },
+                          subCategory: { type: 'string' },
+                          description: { type: 'string' }
+                        }
+                      }
+                    },
                     capabilities: { type: 'array', items: { type: 'string' } },
                     endpoint: { type: 'string' },
-                    apiKey: { type: 'string' }
+                    apiKey: { type: 'string' },
+                    type: { type: 'string', enum: ['informational', 'transactional', 'task'] },
+                    version: { type: 'string' },
+                    author: {
+                      type: 'object',
+                      properties: {
+                        name: { type: 'string' },
+                        website: { type: 'string' },
+                        contactEmail: { type: 'string' }
+                      }
+                    },
+                    tags: { type: 'array', items: { type: 'string' } },
+                    verified: { type: 'boolean' },
+                    trustScore: { type: 'number', minimum: 0, maximum: 100 },
+                    status: { type: 'string', enum: ['active', 'inactive', 'deprecated'] },
+                    logoUrl: { type: 'string' }
                   },
                   required: ['name', 'category', 'capabilities', 'endpoint']
                 }
@@ -123,10 +166,16 @@ async function handleMCPMessage(message: any) {
                       id: s.id,
                       name: s.name,
                       description: s.description,
-                      category: s.category,
+                      category: s.categories?.[0] ? `${s.categories[0].mainCategory}/${s.categories[0].subCategory}` : (s as any).category,
+                      categories: s.categories,
                       capabilities: s.capabilities,
                       verified: s.verified,
-                      trustScore: s.trustScore
+                      trustScore: s.trustScore,
+                      status: s.status,
+                      type: s.type,
+                      version: s.version,
+                      author: s.author,
+                      tags: s.tags
                     })), null, 2)
                   }
                 ]
@@ -154,8 +203,9 @@ async function handleMCPMessage(message: any) {
             const newServer = {
               id: `server-${Date.now()}`,
               ...registerData,
-              verified: false,
-              trustScore: 50,
+              verified: registerData.verified ?? false,
+              trustScore: registerData.trustScore ?? 50,
+              status: registerData.status ?? 'active',
               createdAt: new Date(),
               updatedAt: new Date()
             };
@@ -185,10 +235,16 @@ async function handleMCPMessage(message: any) {
                     text: JSON.stringify(allServers.map(s => ({
                       id: s.id,
                       name: s.name,
-                      category: s.category,
+                      category: s.categories?.[0] ? `${s.categories[0].mainCategory}/${s.categories[0].subCategory}` : (s as any).category,
+                      categories: s.categories,
                       capabilities: s.capabilities,
                       endpoint: s.endpoint,
-                      verified: s.verified
+                      verified: s.verified,
+                      status: s.status,
+                      type: s.type,
+                      version: s.version,
+                      author: s.author,
+                      tags: s.tags
                     })), null, 2)
                   }
                 ]

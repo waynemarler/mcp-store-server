@@ -21,11 +21,18 @@ export async function GET(request: NextRequest) {
         id: s.id,
         name: s.name,
         description: s.description,
-        category: s.category,
+        category: s.categories?.[0] ? `${s.categories[0].mainCategory}/${s.categories[0].subCategory}` : (s as any).category,
+        categories: s.categories,
         capabilities: s.capabilities,
         endpoint: s.endpoint,
         verified: s.verified,
-        trustScore: s.trustScore
+        trustScore: s.trustScore,
+        status: s.status,
+        type: s.type,
+        version: s.version,
+        author: s.author,
+        tags: s.tags,
+        logoUrl: s.logoUrl
       }))
     });
   } catch (error: any) {

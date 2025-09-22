@@ -1,4 +1,4 @@
-import type { MCPServerMetadata, DiscoveryQuery, HealthStatus, ServerMetric } from '@/lib/types';
+import type { MCPServerMetadata, MCPServerRegistration, DiscoveryQuery, HealthStatus, ServerMetric } from '@/lib/types';
 import { PostgresRegistryStore } from './postgres-store';
 import { EnhancedPostgresRegistryStore } from './postgres-store-enhanced';
 
@@ -37,7 +37,7 @@ export class RegistryStore {
     return this.useEnhancedSchema ? this.enhancedPostgresStore : this.postgresStore;
   }
 
-  async register(server: MCPServerMetadata): Promise<void> {
+  async register(server: MCPServerRegistration | MCPServerMetadata): Promise<void> {
     // Ensure category field exists for backward compatibility
     if (!server.category && server.categories?.[0]) {
       server.category = `${server.categories[0].mainCategory}/${server.categories[0].subCategory}`;

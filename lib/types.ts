@@ -28,9 +28,33 @@ export interface MCPServerMetadata {
   apiKey?: string;
   type?: 'informational' | 'transactional' | 'task';
   version?: string;
-  author?: any;
+  author?: Author;
   authorId?: number;
   // Legacy field for backward compatibility
+  category: string;
+  categories?: Category[];
+  capabilities: string[];
+  tags?: string[];
+  verified: boolean;
+  trustScore: number;
+  status: 'active' | 'inactive' | 'deprecated';
+  lastHealthCheck?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Interface for creating servers with partial author data
+export interface MCPServerRegistration {
+  id: string;
+  name: string;
+  description?: string;
+  logoUrl?: string;
+  endpoint: string;
+  apiKey?: string;
+  type?: 'informational' | 'transactional' | 'task';
+  version?: string;
+  author?: PartialAuthor;
+  authorId?: number;
   category: string;
   categories?: Category[];
   capabilities: string[];

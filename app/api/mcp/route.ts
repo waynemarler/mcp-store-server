@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { registry } from '@/lib/registry/store';
 import { mcpClient } from '@/lib/mcp/client';
-import type { RouteRequest, RouteResponse, PartialAuthor, MCPServerMetadata } from '@/lib/types';
+import type { RouteRequest, RouteResponse, PartialAuthor, MCPServerRegistration } from '@/lib/types';
 
 // Schema for tool inputs
 const DiscoverServicesSchema = z.object({
@@ -200,7 +200,7 @@ async function handleMCPMessage(message: any) {
 
           case 'register_server':
             const registerData = RegisterServerSchema.parse(args);
-            const newServer: MCPServerMetadata = {
+            const newServer: MCPServerRegistration = {
               id: `server-${Date.now()}`,
               ...registerData,
               author: registerData.author,
@@ -300,7 +300,7 @@ async function handleDirectAPI(body: any) {
         return Response.json(response);
 
       case 'register':
-        const server: MCPServerMetadata = {
+        const server: MCPServerRegistration = {
           id: `server-${Date.now()}`,
           ...data,
           author: data.author,

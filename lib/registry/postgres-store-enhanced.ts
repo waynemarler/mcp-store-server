@@ -1,5 +1,5 @@
 import { sql } from '@vercel/postgres';
-import type { MCPServerMetadata, DiscoveryQuery, HealthStatus, ServerMetric, Author, PartialAuthor, Category } from '@/lib/types';
+import type { MCPServerMetadata, MCPServerRegistration, DiscoveryQuery, HealthStatus, ServerMetric, Author, PartialAuthor, Category } from '@/lib/types';
 
 export class EnhancedPostgresRegistryStore {
   constructor() {
@@ -103,7 +103,7 @@ export class EnhancedPostgresRegistryStore {
     }
   }
 
-  async register(server: MCPServerMetadata): Promise<void> {
+  async register(server: MCPServerRegistration | MCPServerMetadata): Promise<void> {
     try {
       console.log('Registering server in enhanced Postgres:', server.id);
 

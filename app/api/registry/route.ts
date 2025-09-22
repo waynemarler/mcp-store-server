@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { registry } from '@/lib/registry/store';
 import { z } from 'zod';
-import type { PartialAuthor } from '@/lib/types';
+import type { PartialAuthor, MCPServerMetadata } from '@/lib/types';
 
 const RegisterSchema = z.object({
   name: z.string(),
@@ -56,10 +56,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = RegisterSchema.parse(body);
 
-    const server = {
+    const server: MCPServerMetadata = {
       id: `server-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       ...validated,
       author: validated.author,
+      category: validated.category || 'Uncategorized',
       verified: validated.verified ?? false,
       trustScore: validated.trustScore ?? 50,
       status: validated.status ?? 'active',

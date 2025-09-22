@@ -121,7 +121,7 @@ export class RegistryStore {
     }
     if (query.category) {
       // Check both old-style category field and new categories array
-      const matchesOldStyle = 'category' in server && (server as any).category === query.category;
+      const matchesOldStyle = server.category === query.category;
       const matchesNewStyle = server.categories?.some(c =>
         c.mainCategory === query.category || c.subCategory === query.category
       );

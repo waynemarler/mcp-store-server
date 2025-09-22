@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
         id: s.id,
         name: s.name,
         description: s.description,
-        category: s.categories?.[0] ? `${s.categories[0].mainCategory}/${s.categories[0].subCategory}` : (s as any).category,
+        category: s.categories?.[0] ? `${s.categories[0].mainCategory}/${s.categories[0].subCategory}` : s.category,
         categories: s.categories,
         capabilities: s.capabilities,
         endpoint: s.endpoint,

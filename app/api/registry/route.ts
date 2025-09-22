@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
         id: s.id,
         name: s.name,
         description: s.description,
-        category: s.categories?.[0] ? `${s.categories[0].mainCategory}/${s.categories[0].subCategory}` : (s as any).category,
+        category: s.categories?.[0] ? `${s.categories[0].mainCategory}/${s.categories[0].subCategory}` : s.category,
         categories: s.categories,
         capabilities: s.capabilities,
         endpoint: s.endpoint,
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       server: {
         id: server.id,
         name: server.name,
-        category: server.categories?.[0] ? `${server.categories[0].mainCategory}/${server.categories[0].subCategory}` : (server as any).category,
+        category: server.categories?.[0] ? `${server.categories[0].mainCategory}/${server.categories[0].subCategory}` : server.category,
         categories: server.categories,
         capabilities: server.capabilities
       }

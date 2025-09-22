@@ -166,7 +166,7 @@ async function handleMCPMessage(message: any) {
                       id: s.id,
                       name: s.name,
                       description: s.description,
-                      category: s.categories?.[0] ? `${s.categories[0].mainCategory}/${s.categories[0].subCategory}` : (s as any).category,
+                      category: s.categories?.[0] ? `${s.categories[0].mainCategory}/${s.categories[0].subCategory}` : s.category,
                       categories: s.categories,
                       capabilities: s.capabilities,
                       verified: s.verified,
@@ -235,7 +235,7 @@ async function handleMCPMessage(message: any) {
                     text: JSON.stringify(allServers.map(s => ({
                       id: s.id,
                       name: s.name,
-                      category: s.categories?.[0] ? `${s.categories[0].mainCategory}/${s.categories[0].subCategory}` : (s as any).category,
+                      category: s.categories?.[0] ? `${s.categories[0].mainCategory}/${s.categories[0].subCategory}` : s.category,
                       categories: s.categories,
                       capabilities: s.capabilities,
                       endpoint: s.endpoint,

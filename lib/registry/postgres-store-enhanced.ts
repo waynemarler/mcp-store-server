@@ -1,5 +1,5 @@
 import { sql } from '@vercel/postgres';
-import type { MCPServerMetadata, DiscoveryQuery, HealthStatus, ServerMetric, Author, Category } from '@/lib/types';
+import type { MCPServerMetadata, DiscoveryQuery, HealthStatus, ServerMetric, Author, PartialAuthor, Category } from '@/lib/types';
 
 export class EnhancedPostgresRegistryStore {
   constructor() {
@@ -113,21 +113,28 @@ export class EnhancedPostgresRegistryStore {
       // Insert or update author if provided
       let authorId = server.authorId;
       if (server.author && !authorId) {
-        const authorResult = await sql`
-          INSERT INTO authors (name, website, contact_email)
-          VALUES (${server.author.name}, ${server.author.website || null}, ${server.author.contactEmail || null})
-          ON CONFLICT DO NOTHING
-          RETURNING id
-        `;
-
-        if (authorResult.rows.length > 0) {
-          authorId = authorResult.rows[0].id;
+        // Check if it's a full Author or PartialAuthor
+        const isFullAuthor = 'id' in server.author;
+        if (isFullAuthor) {
+          authorId = (server.author as Author).id;
         } else {
-          // Author already exists, get their ID
-          const existingAuthor = await sql`
-            SELECT id FROM authors WHERE name = ${server.author.name}
+          // Handle PartialAuthor - insert or find existing
+          const authorResult = await sql`
+            INSERT INTO authors (name, website, contact_email)
+            VALUES (${server.author.name}, ${server.author.website || null}, ${server.author.contactEmail || null})
+            ON CONFLICT DO NOTHING
+            RETURNING id
           `;
-          authorId = existingAuthor.rows[0]?.id;
+
+          if (authorResult.rows.length > 0) {
+            authorId = authorResult.rows[0].id;
+          } else {
+            // Author already exists, get their ID
+            const existingAuthor = await sql`
+              SELECT id FROM authors WHERE name = ${server.author.name}
+            `;
+            authorId = existingAuthor.rows[0]?.id;
+          }
         }
       }
 
@@ -314,7 +321,7 @@ export class EnhancedPostgresRegistryStore {
           website: row.author_website,
           contactEmail: row.author_email,
           createdAt: new Date(row.author_created_at)
-        } : undefined,
+        } as Author : undefined,
         categories,
         capabilities: capabilitiesResult.rows.map(c => c.capability_name),
         tags: tagsResult.rows.map(t => t.tag_name),
@@ -430,7 +437,7 @@ export class EnhancedPostgresRegistryStore {
             website: row.author_website,
             contactEmail: row.author_email,
             createdAt: new Date(row.author_created_at)
-          } : undefined,
+          } as Author : undefined,
           categories,
           capabilities: capabilitiesResult.rows.map(c => c.capability_name),
           tags: tagsResult.rows.map(t => t.tag_name),

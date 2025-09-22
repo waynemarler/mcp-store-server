@@ -6,6 +6,12 @@ export interface Author {
   createdAt: Date;
 }
 
+export interface PartialAuthor {
+  name: string;
+  website?: string;
+  contactEmail?: string;
+}
+
 export interface Category {
   id: number;
   mainCategory: string;
@@ -22,7 +28,7 @@ export interface MCPServerMetadata {
   apiKey?: string;
   type?: 'informational' | 'transactional' | 'task';
   version?: string;
-  author?: Author;
+  author?: Author | PartialAuthor;
   authorId?: number;
   // Legacy field for backward compatibility
   category: string;

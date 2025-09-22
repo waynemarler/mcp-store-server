@@ -38,6 +38,13 @@ export class RegistryStore {
   }
 
   async register(server: MCPServerMetadata): Promise<void> {
+    // Ensure category field exists for backward compatibility
+    if (!server.category && server.categories?.[0]) {
+      server.category = `${server.categories[0].mainCategory}/${server.categories[0].subCategory}`;
+    } else if (!server.category) {
+      server.category = 'Uncategorized';
+    }
+
     if (this.useInMemory) {
       console.log('Registering server in memory:', server.id);
       this.inMemoryStore.set(server.id, server);

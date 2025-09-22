@@ -291,10 +291,18 @@ export class EnhancedPostgresRegistryStore {
         WHERE st.server_id = ${serverId}
       `;
 
+      const categories = categoriesResult.rows.map(c => ({
+        id: c.id,
+        mainCategory: c.main_category,
+        subCategory: c.sub_category,
+        description: c.description
+      }));
+
       return {
         id: row.id,
         name: row.name,
         description: row.description,
+        category: categories[0] ? `${categories[0].mainCategory}/${categories[0].subCategory}` : 'Uncategorized',
         logoUrl: row.logo_url,
         endpoint: row.endpoint,
         apiKey: row.api_key,
@@ -307,12 +315,7 @@ export class EnhancedPostgresRegistryStore {
           contactEmail: row.author_email,
           createdAt: new Date(row.author_created_at)
         } : undefined,
-        categories: categoriesResult.rows.map(c => ({
-          id: c.id,
-          mainCategory: c.main_category,
-          subCategory: c.sub_category,
-          description: c.description
-        })),
+        categories,
         capabilities: capabilitiesResult.rows.map(c => c.capability_name),
         tags: tagsResult.rows.map(t => t.tag_name),
         verified: row.verified,
@@ -404,10 +407,18 @@ export class EnhancedPostgresRegistryStore {
           WHERE st.server_id = ${row.id}
         `;
 
+        const categories = categoriesResult.rows.map(c => ({
+          id: c.id,
+          mainCategory: c.main_category,
+          subCategory: c.sub_category,
+          description: c.description
+        }));
+
         servers.push({
           id: row.id,
           name: row.name,
           description: row.description,
+          category: categories[0] ? `${categories[0].mainCategory}/${categories[0].subCategory}` : 'Uncategorized',
           logoUrl: row.logo_url,
           endpoint: row.endpoint,
           apiKey: row.api_key,
@@ -420,12 +431,7 @@ export class EnhancedPostgresRegistryStore {
             contactEmail: row.author_email,
             createdAt: new Date(row.author_created_at)
           } : undefined,
-          categories: categoriesResult.rows.map(c => ({
-            id: c.id,
-            mainCategory: c.main_category,
-            subCategory: c.sub_category,
-            description: c.description
-          })),
+          categories,
           capabilities: capabilitiesResult.rows.map(c => c.capability_name),
           tags: tagsResult.rows.map(t => t.tag_name),
           verified: row.verified,

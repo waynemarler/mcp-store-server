@@ -25,7 +25,7 @@ export interface MCPServerMetadata {
   author?: Author;
   authorId?: number;
   // Legacy field for backward compatibility
-  category?: string;
+  category: string;
   categories?: Category[];
   capabilities: string[];
   tags?: string[];

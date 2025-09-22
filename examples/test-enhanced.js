@@ -58,6 +58,7 @@ async function testEnhancedRegistration() {
     id: 'weather-service-enhanced',
     name: 'Enhanced Weather Service',
     description: 'Advanced weather service with comprehensive meteorological data',
+    category: 'Information/Weather', // Legacy field for compatibility
     logoUrl: 'https://example.com/weather-logo.png',
     endpoint: `${BASE_URL}/api/weather-mcp`,
     type: 'informational',
@@ -87,6 +88,7 @@ async function testEnhancedRegistration() {
     id: 'analytics-service',
     name: 'Data Analytics Engine',
     description: 'Powerful data analytics and visualization platform',
+    category: 'Tools/Analytics', // Legacy field for compatibility
     logoUrl: 'https://example.com/analytics-logo.png',
     endpoint: 'https://analytics.example.com/mcp',
     type: 'task',
@@ -116,6 +118,7 @@ async function testEnhancedRegistration() {
     id: 'database-service',
     name: 'Cloud Database Manager',
     description: 'Manage cloud databases with ease',
+    category: 'Data/Database', // Legacy field for compatibility
     endpoint: 'https://db.example.com/mcp',
     type: 'transactional',
     version: '3.0.1',

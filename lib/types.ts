@@ -1,13 +1,35 @@
+export interface Author {
+  id: number;
+  name: string;
+  website?: string;
+  contactEmail?: string;
+  createdAt: Date;
+}
+
+export interface Category {
+  id: number;
+  mainCategory: string;
+  subCategory: string;
+  description?: string;
+}
+
 export interface MCPServerMetadata {
   id: string;
   name: string;
   description?: string;
-  category: string;
-  capabilities: string[];
+  logoUrl?: string;
   endpoint: string;
   apiKey?: string;
+  type?: 'informational' | 'transactional' | 'task';
+  version?: string;
+  author?: Author;
+  authorId?: number;
+  categories?: Category[];
+  capabilities: string[];
+  tags?: string[];
   verified: boolean;
   trustScore: number;
+  status: 'active' | 'inactive' | 'deprecated';
   lastHealthCheck?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -39,4 +61,13 @@ export interface HealthStatus {
   lastCheck: Date;
   responseTime?: number;
   error?: string;
+}
+
+export interface ServerMetric {
+  id?: number;
+  serverId: string;
+  metricType: 'request' | 'error' | 'latency';
+  value: number;
+  metadata?: any;
+  recordedAt: Date;
 }

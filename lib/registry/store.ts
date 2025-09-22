@@ -1,12 +1,15 @@
-import type { MCPServerMetadata, DiscoveryQuery, HealthStatus } from '@/lib/types';
+import type { MCPServerMetadata, DiscoveryQuery, HealthStatus, ServerMetric } from '@/lib/types';
 import { PostgresRegistryStore } from './postgres-store';
+import { EnhancedPostgresRegistryStore } from './postgres-store-enhanced';
 
 export class RegistryStore {
   private postgresStore: PostgresRegistryStore;
+  private enhancedPostgresStore: EnhancedPostgresRegistryStore;
   private inMemoryStore: Map<string, MCPServerMetadata> = new Map();
 
   constructor() {
     this.postgresStore = new PostgresRegistryStore();
+    this.enhancedPostgresStore = new EnhancedPostgresRegistryStore();
   }
 
   private get useInMemory(): boolean {
@@ -15,10 +18,23 @@ export class RegistryStore {
 
     console.log('Storage Environment check:', {
       hasPostgres: hasPostgresEnv,
-      useInMemory: !hasPostgresEnv
+      useInMemory: !hasPostgresEnv,
+      useEnhanced: !!process.env.USE_ENHANCED_SCHEMA
     });
 
     return !hasPostgresEnv;
+  }
+
+  private get useEnhancedSchema(): boolean {
+    // Use enhanced schema if explicitly enabled
+    return !!process.env.USE_ENHANCED_SCHEMA;
+  }
+
+  private get activeStore() {
+    if (this.useInMemory) {
+      return null;
+    }
+    return this.useEnhancedSchema ? this.enhancedPostgresStore : this.postgresStore;
   }
 
   async register(server: MCPServerMetadata): Promise<void> {
@@ -28,8 +44,8 @@ export class RegistryStore {
       return;
     }
 
-    // Use Postgres storage
-    return this.postgresStore.register(server);
+    // Use appropriate Postgres storage
+    return this.activeStore!.register(server);
   }
 
   async get(serverId: string): Promise<MCPServerMetadata | null> {
@@ -37,7 +53,7 @@ export class RegistryStore {
       return this.inMemoryStore.get(serverId) || null;
     }
 
-    return this.postgresStore.get(serverId);
+    return this.activeStore!.get(serverId);
   }
 
   async discover(query: DiscoveryQuery): Promise<MCPServerMetadata[]> {
@@ -54,8 +70,8 @@ export class RegistryStore {
       return servers.sort((a, b) => b.trustScore - a.trustScore);
     }
 
-    // Use Postgres storage
-    return this.postgresStore.discover(query);
+    // Use appropriate Postgres storage
+    return this.activeStore!.discover(query);
   }
 
   async updateHealth(serverId: string, status: HealthStatus): Promise<void> {
@@ -65,7 +81,7 @@ export class RegistryStore {
       server.lastHealthCheck = status.lastCheck;
       this.inMemoryStore.set(serverId, server);
     } else {
-      return this.postgresStore.updateHealth(serverId, status);
+      return this.activeStore!.updateHealth(serverId, status);
     }
   }
 
@@ -80,7 +96,7 @@ export class RegistryStore {
       };
     }
 
-    return this.postgresStore.getHealth(serverId);
+    return this.activeStore!.getHealth(serverId);
   }
 
   async getAllServers(): Promise<MCPServerMetadata[]> {
@@ -88,14 +104,14 @@ export class RegistryStore {
       return Array.from(this.inMemoryStore.values());
     }
 
-    return this.postgresStore.getAllServers();
+    return this.activeStore!.getAllServers();
   }
 
   async delete(serverId: string): Promise<void> {
     if (this.useInMemory) {
       this.inMemoryStore.delete(serverId);
     } else {
-      return this.postgresStore.delete(serverId);
+      return this.activeStore!.delete(serverId);
     }
   }
 
@@ -103,13 +119,43 @@ export class RegistryStore {
     if (query.capability && !server.capabilities.includes(query.capability)) {
       return false;
     }
-    if (query.category && server.category !== query.category) {
-      return false;
+    if (query.category) {
+      // Check both old-style category field and new categories array
+      const matchesOldStyle = 'category' in server && (server as any).category === query.category;
+      const matchesNewStyle = server.categories?.some(c =>
+        c.mainCategory === query.category || c.subCategory === query.category
+      );
+      if (!matchesOldStyle && !matchesNewStyle) {
+        return false;
+      }
     }
     if (query.verified !== undefined && server.verified !== query.verified) {
       return false;
     }
     return true;
+  }
+
+  async recordMetric(metric: ServerMetric): Promise<void> {
+    if (this.useInMemory) {
+      console.log('Metric recording not supported in memory mode');
+      return;
+    }
+
+    if (this.useEnhancedSchema && this.enhancedPostgresStore) {
+      return this.enhancedPostgresStore.recordMetric(metric);
+    }
+  }
+
+  async getMetrics(serverId: string, metricType?: string, since?: Date): Promise<ServerMetric[]> {
+    if (this.useInMemory) {
+      return [];
+    }
+
+    if (this.useEnhancedSchema && this.enhancedPostgresStore) {
+      return this.enhancedPostgresStore.getMetrics(serverId, metricType, since);
+    }
+
+    return [];
   }
 }
 

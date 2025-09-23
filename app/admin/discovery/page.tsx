@@ -54,7 +54,7 @@ export default function AdminDiscoveryPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/discovery/catalog?status=${selectedStatus}&limit=50`);
+      const response = await fetch(`/api/discovery/catalog?${selectedStatus !== 'all' ? `status=${selectedStatus}&` : ''}limit=50`);
       const data = await response.json();
 
       if (data.success) {
@@ -338,9 +338,9 @@ export default function AdminDiscoveryPage() {
                       </button>
                       <button
                         onClick={() => updateServerStatus(server.id, 'approved')}
-                        className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
+                        className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
                       >
-                        ✅ Approve
+                        👍 Approve
                       </button>
                       <button
                         onClick={() => updateServerStatus(server.id, 'rejected')}
@@ -354,9 +354,9 @@ export default function AdminDiscoveryPage() {
                     <>
                       <button
                         onClick={() => updateServerStatus(server.id, 'approved')}
-                        className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
+                        className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
                       >
-                        ✅ Approve
+                        👍 Approve
                       </button>
                       <button
                         onClick={() => updateServerStatus(server.id, 'rejected')}

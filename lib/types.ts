@@ -85,6 +85,9 @@ export interface DiscoveryQuery {
   capability?: string;
   category?: string;
   verified?: boolean;
+  status?: 'discovered' | 'active' | 'all';
+  minTrustScore?: number;
+  includeInactive?: boolean;
 }
 
 export interface HealthStatus {
@@ -102,4 +105,100 @@ export interface ServerMetric {
   value: number;
   metadata?: any;
   recordedAt: Date;
+}
+
+// New: Two-tier system types
+export interface DiscoveredServer {
+  id: string;
+  status: 'discovered' | 'contacted' | 'approved' | 'rejected';
+  activated: boolean;
+
+  // GitHub repository info
+  repository: {
+    owner: string;
+    name: string;
+    fullName: string;
+    url: string;
+    stars: number;
+    forks: number;
+    language?: string;
+    description?: string;
+    updatedAt: string;
+  };
+
+  // Our analysis
+  analysis: {
+    confidence: number;
+    indicators: string[];
+    hasManifest: boolean;
+    manifestPath?: string;
+    inferredName?: string;
+    inferredDescription?: string;
+    inferredCapabilities?: string[];
+    inferredCategories?: string[];
+    inferredTags?: string[];
+    trustScore?: number;
+  };
+
+  // Developer engagement tracking
+  developer: {
+    githubUsername: string;
+    contactEmail?: string;
+    contactAttempts: ContactAttempt[];
+    approvalRequested: boolean;
+    approvedAt?: Date;
+    rejectedAt?: Date;
+    rejectionReason?: string;
+  };
+
+  // If approved and activated
+  activeServerId?: string; // Links to MCPServerMetadata
+
+  discoveredAt: Date;
+  lastContactAt?: Date;
+  activatedAt?: Date;
+}
+
+export interface ContactAttempt {
+  id: string;
+  method: 'email' | 'github-issue' | 'github-discussion';
+  sentAt: Date;
+  template: string;
+  successful: boolean;
+  response?: string;
+  responseAt?: Date;
+}
+
+// Developer portal types
+export interface DeveloperProfile {
+  id: string;
+  githubUsername: string;
+  githubId: number;
+  email?: string;
+  name?: string;
+  avatarUrl?: string;
+  website?: string;
+  connectedRepositories: string[]; // Repository full names
+  activeServers: string[]; // Active server IDs
+  discoveredServers: string[]; // Discovered server IDs
+  joinedAt: Date;
+  lastLoginAt: Date;
+}
+
+export interface RepositoryConnection {
+  id: string;
+  developerId: string;
+  repository: {
+    owner: string;
+    name: string;
+    fullName: string;
+  };
+  analysisResult?: {
+    confidence: number;
+    hasManifest: boolean;
+    capabilities: string[];
+  };
+  registrationStatus: 'none' | 'pending' | 'completed';
+  registeredServerId?: string;
+  connectedAt: Date;
 }

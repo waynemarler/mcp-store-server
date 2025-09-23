@@ -86,8 +86,8 @@ export class DiscoveredServerStore {
           url: candidate.repository.html_url,
           stars: candidate.repository.stargazers_count,
           forks: candidate.repository.forks_count,
-          language: candidate.repository.language,
-          description: candidate.repository.description,
+          language: candidate.repository.language || undefined,
+          description: candidate.repository.description || undefined,
           updatedAt: candidate.repository.updated_at
         },
         analysis: {

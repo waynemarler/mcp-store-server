@@ -16,10 +16,12 @@ export class RegistryStore {
     // Use Postgres if environment variable is available
     const hasPostgresEnv = !!process.env.POSTGRES_URL;
 
-    console.log('Storage Environment check:', {
+    console.log('🔍 Storage Environment check:', {
       hasPostgres: hasPostgresEnv,
       useInMemory: !hasPostgresEnv,
-      useEnhanced: !!process.env.USE_ENHANCED_SCHEMA
+      useEnhanced: !!process.env.USE_ENHANCED_SCHEMA,
+      USE_ENHANCED_SCHEMA_value: process.env.USE_ENHANCED_SCHEMA,
+      POSTGRES_URL_exists: !!process.env.POSTGRES_URL
     });
 
     return !hasPostgresEnv;
@@ -27,7 +29,13 @@ export class RegistryStore {
 
   private get useEnhancedSchema(): boolean {
     // Use enhanced schema if explicitly enabled
-    return !!process.env.USE_ENHANCED_SCHEMA;
+    const enhanced = !!process.env.USE_ENHANCED_SCHEMA;
+    console.log('🚀 Enhanced schema check:', {
+      USE_ENHANCED_SCHEMA: process.env.USE_ENHANCED_SCHEMA,
+      enhanced,
+      typeof: typeof process.env.USE_ENHANCED_SCHEMA
+    });
+    return enhanced;
   }
 
   private get activeStore() {

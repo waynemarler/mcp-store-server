@@ -217,6 +217,7 @@ async function handleMCPMessage(message: any) {
             });
 
           case "register_server":
+            console.log("🚀 Using UPDATED MCP route file - author transform version");
             const registerData = RegisterServerSchema.parse(args);
             const now = new Date();
             const newServer = {
@@ -351,6 +352,7 @@ async function handleDirectAPI(body: any) {
         return Response.json(response);
 
       case "register":
+        console.log("🚀 Using UPDATED direct API handler - author transform version");
         const now = new Date();
         const server = {
           id: `server-${Date.now()}`,

@@ -194,12 +194,13 @@ export default function AdminDiscoveryPage() {
           </div>
         )}
 
-        {/* Controls */}
-        <div className="bg-white p-6 rounded-lg shadow mb-8">
-          <div className="flex flex-wrap items-center gap-4">
+        {/* Scan Controls */}
+        <div className="bg-white p-6 rounded-lg shadow mb-4">
+          <div className="flex items-center gap-4">
+            <h3 className="text-lg font-semibold text-gray-900">GitHub Discovery Scan</h3>
             <div className="flex items-center gap-2">
               <label htmlFor="scanLimit" className="text-sm font-medium text-gray-700">
-                Scan Limit:
+                Repositories to scan:
               </label>
               <input
                 id="scanLimit"
@@ -218,19 +219,32 @@ export default function AdminDiscoveryPage() {
                 {scanning ? 'Scanning...' : `🔍 Scan ${scanLimit} Repos`}
               </button>
             </div>
+          </div>
+        </div>
 
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="border border-gray-300 rounded-md px-3 py-2"
-            >
-              <option value="all">All Status</option>
-              <option value="discovered">Discovered</option>
-              <option value="contacted">Contacted</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-            </select>
-
+        {/* Filter Controls */}
+        <div className="bg-white p-6 rounded-lg shadow mb-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <h3 className="text-lg font-semibold text-gray-900">Filter Discovered Servers</h3>
+              <div className="flex items-center gap-2">
+                <label htmlFor="statusFilter" className="text-sm font-medium text-gray-700">
+                  Show servers with status:
+                </label>
+                <select
+                  id="statusFilter"
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  className="border border-gray-300 rounded-md px-3 py-2"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="discovered">🔍 Discovered</option>
+                  <option value="contacted">📧 Contacted</option>
+                  <option value="approved">✅ Approved</option>
+                  <option value="rejected">❌ Rejected</option>
+                </select>
+              </div>
+            </div>
             <button
               onClick={loadData}
               className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700"

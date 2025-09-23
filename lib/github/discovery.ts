@@ -49,7 +49,7 @@ export class GitHubDiscoveryService {
    */
   async searchMCPRepositories(options: {
     query?: string;
-    sort?: 'stars' | 'updated' | 'created';
+    sort?: 'stars' | 'updated' | 'forks' | 'help-wanted-issues';
     order?: 'asc' | 'desc';
     per_page?: number;
     page?: number;

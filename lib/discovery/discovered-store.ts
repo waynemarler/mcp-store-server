@@ -247,13 +247,13 @@ export class DiscoveredServerStore {
 
       if (status === 'rejected' && metadata?.rejectionReason) {
         // Update developer object with rejection reason
-        await sql`
+        await sql.query(`
           UPDATE discovered_servers
           SET developer = jsonb_set(developer, '{rejectionReason}', '"${metadata.rejectionReason}"'),
               developer = jsonb_set(developer, '{rejectedAt}', '"${new Date().toISOString()}"'),
-              ${sql.raw(updateFields)}
-          WHERE id = ${id}
-        `;
+              ${updateFields}
+          WHERE id = '${id}'
+        `);
       } else {
         await sql.query(`
           UPDATE discovered_servers

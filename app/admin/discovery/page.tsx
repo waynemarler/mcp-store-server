@@ -49,6 +49,7 @@ export default function AdminDiscoveryPage() {
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [scanLimit, setScanLimit] = useState(10);
 
   const loadData = async () => {
     try {
@@ -76,7 +77,7 @@ export default function AdminDiscoveryPage() {
         body: JSON.stringify({
           action: 'scan_and_store',
           query: 'mcp server OR "model context protocol"',
-          limit: 30
+          limit: scanLimit
         })
       });
 
@@ -196,13 +197,27 @@ export default function AdminDiscoveryPage() {
         {/* Controls */}
         <div className="bg-white p-6 rounded-lg shadow mb-8">
           <div className="flex flex-wrap items-center gap-4">
-            <button
-              onClick={scanAndStore}
-              disabled={scanning}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
-            >
-              {scanning ? 'Scanning...' : '🔍 Scan GitHub'}
-            </button>
+            <div className="flex items-center gap-2">
+              <label htmlFor="scanLimit" className="text-sm font-medium text-gray-700">
+                Scan Limit:
+              </label>
+              <input
+                id="scanLimit"
+                type="number"
+                value={scanLimit}
+                onChange={(e) => setScanLimit(parseInt(e.target.value) || 10)}
+                min="1"
+                max="100"
+                className="border border-gray-300 rounded-md px-3 py-2 w-20 text-center"
+              />
+              <button
+                onClick={scanAndStore}
+                disabled={scanning}
+                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+              >
+                {scanning ? 'Scanning...' : `🔍 Scan ${scanLimit} Repos`}
+              </button>
+            </div>
 
             <select
               value={selectedStatus}

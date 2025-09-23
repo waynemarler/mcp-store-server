@@ -103,7 +103,7 @@ export class EnhancedPostgresRegistryStore {
     }
   }
 
-  async register(server: MCPServerRegistration | MCPServerMetadata): Promise<void> {
+  async register(server: any): Promise<void> {
     try {
       console.log('Registering server in enhanced Postgres:', server.id);
 

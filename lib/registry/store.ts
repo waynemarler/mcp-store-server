@@ -37,7 +37,7 @@ export class RegistryStore {
     return this.useEnhancedSchema ? this.enhancedPostgresStore : this.postgresStore;
   }
 
-  async register(server: MCPServerRegistration | MCPServerMetadata): Promise<void> {
+  async register(server: any): Promise<void> {
     // Ensure category field exists for backward compatibility
     if (!server.category && server.categories?.[0]) {
       server.category = `${server.categories[0].mainCategory}/${server.categories[0].subCategory}`;

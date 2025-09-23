@@ -443,5 +443,10 @@ export async function GET(request: NextRequest) {
     version: "1.0.0",
     description: "Meta-layer MCP server for routing and discovery",
     capabilities: ["discover_services", "route_request", "register_server"],
+    environment: {
+      USE_ENHANCED_SCHEMA: process.env.USE_ENHANCED_SCHEMA,
+      hasPostgres: !!process.env.POSTGRES_URL,
+      schemaActive: !!process.env.USE_ENHANCED_SCHEMA ? "enhanced" : "simple"
+    }
   });
 }

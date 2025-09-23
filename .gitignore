@@ -5,8 +5,12 @@
 /.pnp
 .pnp.js
 
+# internal docs
+/docs
+
 # testing
 /coverage
+/examples
 
 # next.js
 /.next/

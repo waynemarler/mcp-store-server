@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     console.log('Existing tables:', existingTables.rows.map(r => r.table_name));
 
     // Check if we have data in the old table
-    let existingServers = [];
+    let existingServers: any[] = [];
     try {
       const serverCheck = await sql`SELECT COUNT(*) as count FROM mcp_servers`;
       const serverCount = serverCheck.rows[0].count;

@@ -109,6 +109,7 @@ export class PostgresRegistryStore {
         apiKey: row.api_key,
         verified: row.verified,
         trustScore: row.trust_score,
+        status: 'active', // Default status for simple schema
         lastHealthCheck: row.last_health_check ? new Date(row.last_health_check) : undefined,
         createdAt: new Date(row.created_at),
         updatedAt: new Date(row.updated_at)
@@ -159,6 +160,7 @@ export class PostgresRegistryStore {
         apiKey: row.api_key,
         verified: row.verified,
         trustScore: row.trust_score,
+        status: 'active' as const,
         lastHealthCheck: row.last_health_check ? new Date(row.last_health_check) : undefined,
         createdAt: new Date(row.created_at),
         updatedAt: new Date(row.updated_at)
@@ -223,6 +225,7 @@ export class PostgresRegistryStore {
         apiKey: row.api_key,
         verified: row.verified,
         trustScore: row.trust_score,
+        status: 'active' as const,
         lastHealthCheck: row.last_health_check ? new Date(row.last_health_check) : undefined,
         createdAt: new Date(row.created_at),
         updatedAt: new Date(row.updated_at)

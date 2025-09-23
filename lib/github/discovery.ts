@@ -162,6 +162,9 @@ export class GitHubDiscoveryService {
 
         if (Array.isArray(response.data)) continue;
 
+        // Type guard to ensure this is a file with content
+        if (response.data.type !== 'file' || !('content' in response.data)) continue;
+
         const content = Buffer.from(response.data.content, 'base64').toString();
         const parsed = JSON.parse(content);
 
@@ -200,7 +203,7 @@ export class GitHubDiscoveryService {
             path: file
           });
 
-          if (!Array.isArray(response.data)) {
+          if (!Array.isArray(response.data) && response.data.type === 'file' && 'content' in response.data) {
             const content = Buffer.from(response.data.content, 'base64').toString();
 
             // Look for MCP-specific patterns
@@ -225,7 +228,7 @@ export class GitHubDiscoveryService {
           path: 'README.md'
         });
 
-        if (!Array.isArray(readmeResponse.data)) {
+        if (!Array.isArray(readmeResponse.data) && readmeResponse.data.type === 'file' && 'content' in readmeResponse.data) {
           const readmeContent = Buffer.from(readmeResponse.data.content, 'base64').toString().toLowerCase();
 
           if (readmeContent.includes('mcp') ||

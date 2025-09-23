@@ -238,17 +238,24 @@ async function handleMCPMessage(message: any) {
               logoUrl: registerData.logoUrl,
               createdAt: now,
               updatedAt: now,
-              // Transform author object to include required fields
+              // For enhanced schema, pass PartialAuthor (store will create database record)
+              // For simple schema, transform to full Author with generated ID
               author: registerData.author
-                ? {
-                    id: `author-${Date.now()}-${Math.random()
-                      .toString(36)
-                      .substr(2, 9)}`,
-                    name: registerData.author.name,
-                    website: registerData.author.website,
-                    contactEmail: registerData.author.contactEmail,
-                    createdAt: now,
-                  }
+                ? (process.env.USE_ENHANCED_SCHEMA === 'true'
+                    ? {
+                        name: registerData.author.name,
+                        website: registerData.author.website,
+                        contactEmail: registerData.author.contactEmail,
+                      }
+                    : {
+                        id: `author-${Date.now()}-${Math.random()
+                          .toString(36)
+                          .substr(2, 9)}`,
+                        name: registerData.author.name,
+                        website: registerData.author.website,
+                        contactEmail: registerData.author.contactEmail,
+                        createdAt: now,
+                      })
                 : undefined,
             };
             await registry.register(newServer);
@@ -372,17 +379,24 @@ async function handleDirectAPI(body: any) {
           logoUrl: data.logoUrl,
           createdAt: now,
           updatedAt: now,
-          // Transform author object to include required fields
+          // For enhanced schema, pass PartialAuthor (store will create database record)
+          // For simple schema, transform to full Author with generated ID
           author: data.author
-            ? {
-                id: `author-${Date.now()}-${Math.random()
-                  .toString(36)
-                  .substr(2, 9)}`,
-                name: data.author.name,
-                website: data.author.website,
-                contactEmail: data.author.contactEmail,
-                createdAt: now,
-              }
+            ? (process.env.USE_ENHANCED_SCHEMA === 'true'
+                ? {
+                    name: data.author.name,
+                    website: data.author.website,
+                    contactEmail: data.author.contactEmail,
+                  }
+                : {
+                    id: `author-${Date.now()}-${Math.random()
+                      .toString(36)
+                      .substr(2, 9)}`,
+                    name: data.author.name,
+                    website: data.author.website,
+                    contactEmail: data.author.contactEmail,
+                    createdAt: now,
+                  })
             : undefined,
         };
         await registry.register(server);

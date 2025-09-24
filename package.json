@@ -9,7 +9,14 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
     "@modelcontextprotocol/sdk": "^1.0.4",
+    "@mui/icons-material": "^7.3.2",
+    "@mui/lab": "^7.0.0-beta.17",
+    "@mui/material": "^7.3.2",
+    "@mui/system": "^7.3.2",
+    "@mui/x-data-grid-pro": "^8.11.3",
     "@octokit/auth-app": "^6.1.1",
     "@octokit/rest": "^20.1.1",
     "@vercel/kv": "^3.0.0",

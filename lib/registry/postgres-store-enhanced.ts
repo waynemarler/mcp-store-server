@@ -369,111 +369,112 @@ export class EnhancedPostgresRegistryStore {
   }
 
   private async getInternalServers(query: DiscoveryQuery): Promise<MCPServerMetadata[]> {
-    let whereConditions: string[] = ['1=1'];
-    const params: any[] = [];
+    try {
+      let whereConditions: string[] = ['1=1'];
+      const params: any[] = [];
 
-    if (query.capability) {
-      whereConditions.push(`
-        EXISTS (
-          SELECT 1 FROM server_capabilities sc
-          JOIN capabilities c ON sc.capability_id = c.id
-          WHERE sc.server_id = s.id AND c.capability_name = $${params.length + 1}
-        )
-      `);
-      params.push(query.capability);
-    }
-
-    if (query.category) {
-      whereConditions.push(`
-        EXISTS (
-          SELECT 1 FROM server_categories sc
-          JOIN categories c ON sc.category_id = c.id
-          WHERE sc.server_id = s.id AND (
-            c.main_category = $${params.length + 1} OR
-            c.sub_category = $${params.length + 1}
+      if (query.capability) {
+        whereConditions.push(`
+          EXISTS (
+            SELECT 1 FROM server_capabilities sc
+            JOIN capabilities c ON sc.capability_id = c.id
+            WHERE sc.server_id = s.id AND c.capability_name = $${params.length + 1}
           )
-        )
-      `);
-      params.push(query.category);
-    }
+        `);
+        params.push(query.capability);
+      }
 
-    if (query.verified !== undefined) {
-      whereConditions.push(`s.verified = $${params.length + 1}`);
-      params.push(query.verified);
-    }
+      if (query.category) {
+        whereConditions.push(`
+          EXISTS (
+            SELECT 1 FROM server_categories sc
+            JOIN categories c ON sc.category_id = c.id
+            WHERE sc.server_id = s.id AND (
+              c.main_category = $${params.length + 1} OR
+              c.sub_category = $${params.length + 1}
+            )
+          )
+        `);
+        params.push(query.category);
+      }
 
-    const queryText = `
-      SELECT DISTINCT
-        s.*,
-        a.name as author_name,
-        a.website as author_website,
-        a.contact_email as author_email,
-        a.created_at as author_created_at
-      FROM mcp_servers s
-      LEFT JOIN authors a ON s.author_id = a.id
-      WHERE ${whereConditions.join(' AND ')}
-      AND s.status = 'active'
-      ORDER BY s.trust_score DESC, s.created_at DESC
-    `;
+      if (query.verified !== undefined) {
+        whereConditions.push(`s.verified = $${params.length + 1}`);
+        params.push(query.verified);
+      }
 
-    const result = await sql.query(queryText, params);
-
-    const servers: MCPServerMetadata[] = [];
-    for (const row of result.rows) {
-      // Get categories for each server
-      const categoriesResult = await sql`
-        SELECT c.* FROM categories c
-        JOIN server_categories sc ON c.id = sc.category_id
-        WHERE sc.server_id = ${row.id}
+      const queryText = `
+        SELECT DISTINCT
+          s.*,
+          a.name as author_name,
+          a.website as author_website,
+          a.contact_email as author_email,
+          a.created_at as author_created_at
+        FROM mcp_servers s
+        LEFT JOIN authors a ON s.author_id = a.id
+        WHERE ${whereConditions.join(' AND ')}
+        AND s.status = 'active'
+        ORDER BY s.trust_score DESC, s.created_at DESC
       `;
 
-      // Get capabilities
-      const capabilitiesResult = await sql`
-        SELECT cap.capability_name FROM capabilities cap
-        JOIN server_capabilities sc ON cap.id = sc.capability_id
-        WHERE sc.server_id = ${row.id}
-      `;
+      const result = await sql.query(queryText, params);
 
-      // Get tags
-      const tagsResult = await sql`
-        SELECT t.tag_name FROM tags t
-        JOIN server_tags st ON t.id = st.tag_id
-        WHERE st.server_id = ${row.id}
-      `;
+      const servers: MCPServerMetadata[] = [];
+      for (const row of result.rows) {
+        // Get categories for each server
+        const categoriesResult = await sql`
+          SELECT c.* FROM categories c
+          JOIN server_categories sc ON c.id = sc.category_id
+          WHERE sc.server_id = ${row.id}
+        `;
 
-      const categories = categoriesResult.rows.map(c => ({
-        id: c.id,
-        mainCategory: c.main_category,
-        subCategory: c.sub_category,
-        description: c.description
-      }));
+        // Get capabilities
+        const capabilitiesResult = await sql`
+          SELECT cap.capability_name FROM capabilities cap
+          JOIN server_capabilities sc ON cap.id = sc.capability_id
+          WHERE sc.server_id = ${row.id}
+        `;
 
-      servers.push({
-        id: row.id,
-        name: row.name,
-        description: row.description,
-        category: categories[0] ? `${categories[0].mainCategory}/${categories[0].subCategory}` : 'Uncategorized',
-        logoUrl: row.logo_url,
-        endpoint: row.endpoint,
-        apiKey: row.api_key,
-        type: row.type,
-        version: row.version,
-        author: row.author_id ? {
-          id: row.author_id,
-          name: row.author_name,
-          website: row.author_website,
-          contactEmail: row.author_email,
-          createdAt: new Date(row.author_created_at)
-        } as Author : undefined,
-        categories,
-        capabilities: capabilitiesResult.rows.map(c => c.capability_name),
-        tags: tagsResult.rows.map(t => t.tag_name),
-        verified: row.verified,
-        trustScore: row.trust_score,
-        status: row.status,
-        lastHealthCheck: row.last_health_check ? new Date(row.last_health_check) : undefined,
-        createdAt: new Date(row.created_at),
-        updatedAt: new Date(row.updated_at)
+        // Get tags
+        const tagsResult = await sql`
+          SELECT t.tag_name FROM tags t
+          JOIN server_tags st ON t.id = st.tag_id
+          WHERE st.server_id = ${row.id}
+        `;
+
+        const categories = categoriesResult.rows.map(c => ({
+          id: c.id,
+          mainCategory: c.main_category,
+          subCategory: c.sub_category,
+          description: c.description
+        }));
+
+        servers.push({
+          id: row.id,
+          name: row.name,
+          description: row.description,
+          category: categories[0] ? `${categories[0].mainCategory}/${categories[0].subCategory}` : 'Uncategorized',
+          logoUrl: row.logo_url,
+          endpoint: row.endpoint,
+          apiKey: row.api_key,
+          type: row.type,
+          version: row.version,
+          author: row.author_id ? {
+            id: row.author_id,
+            name: row.author_name,
+            website: row.author_website,
+            contactEmail: row.author_email,
+            createdAt: new Date(row.author_created_at)
+          } as Author : undefined,
+          categories,
+          capabilities: capabilitiesResult.rows.map(c => c.capability_name),
+          tags: tagsResult.rows.map(t => t.tag_name),
+          verified: row.verified,
+          trustScore: row.trust_score,
+          status: row.status,
+          lastHealthCheck: row.last_health_check ? new Date(row.last_health_check) : undefined,
+          createdAt: new Date(row.created_at),
+          updatedAt: new Date(row.updated_at)
         });
       }
 

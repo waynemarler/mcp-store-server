@@ -489,19 +489,16 @@ export class EnhancedPostgresRegistryStore {
   private async getExternalServers(query: DiscoveryQuery): Promise<MCPServerMetadata[]> {
     try {
       let whereClause = 'WHERE 1=1';
-      const params: any[] = [];
 
       if (query.category) {
-        whereClause += ` AND category = $${params.length + 1}`;
-        params.push(query.category);
+        whereClause += ` AND category = '${query.category}'`;
       }
 
       if (query.verified !== undefined) {
-        whereClause += ` AND is_verified = $${params.length + 1}`;
-        params.push(query.verified);
+        whereClause += ` AND is_verified = ${query.verified}`;
       }
 
-      const queryText = `
+      const result = await sql`
         SELECT
           'ext_' || id as id, display_name as name, description,
           category, '[]'::jsonb as capabilities,
@@ -516,11 +513,8 @@ export class EnhancedPostgresRegistryStore {
           deployment_url, connections, downloads, version,
           source_created_at, fetched_at, api_source, raw_json
         FROM smithery_mcp_servers
-        ${whereClause}
         ORDER BY use_count DESC, source_created_at DESC
       `;
-
-      const result = await sql.query(queryText, params);
 
       const servers = result.rows.map(row => ({
         id: row.id,

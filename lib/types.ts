@@ -86,8 +86,8 @@ export interface MCPServerRegistration {
 }
 
 export interface RouteRequest {
-  capability: string;
-  method: string;
+  capability?: string;
+  method?: string;
   params?: any;
   preferredServer?: string;
 }

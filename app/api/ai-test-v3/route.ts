@@ -207,7 +207,7 @@ function determineWinner(v1: any, v2: any, v3: any) {
   };
 
   const winner = Object.entries(scores).reduce((a, b) =>
-    scores[a[0]] > scores[b[0]] ? a : b
+    (scores as any)[a[0]] > (scores as any)[b[0]] ? a : b
   )[0];
 
   return { winner, scores };

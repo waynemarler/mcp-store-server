@@ -22,10 +22,10 @@ export async function POST(request: NextRequest) {
 
     // Capability matching from tools JSON
     if (capabilities.length > 0) {
-      const capabilityConditions = capabilities.map((cap, index) =>
+      const capabilityConditions = capabilities.map((cap: string, index: number) =>
         `tools::text ILIKE $${params.length + index + 1}`
       );
-      capabilities.forEach(cap => params.push(`%${cap}%`));
+      capabilities.forEach((cap: string) => params.push(`%${cap}%`));
       whereClause += ` AND (${capabilityConditions.join(' OR ')})`;
     }
 

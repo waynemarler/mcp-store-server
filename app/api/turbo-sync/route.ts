@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
         local: stats.local,
         withTools: stats.withTools,
         categories: Object.entries(stats.categories)
-          .sort(([,a], [,b]) => b - a)
+          .sort(([,a], [,b]) => (b as number) - (a as number))
           .slice(0, 10)
           .map(([cat, count]) => ({ category: cat, count }))
       },

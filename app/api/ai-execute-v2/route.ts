@@ -141,7 +141,7 @@ function buildEnhancedQuery(options: any) {
 
   // Capability matching with scoring
   if (capabilities.length > 0) {
-    const capScores = capabilities.map(cap => {
+    const capScores = capabilities.map((cap: string) => {
       paramIndex++;
       params.push(`%${cap}%`);
       return `CASE WHEN tools::text ILIKE $${paramIndex} THEN 3 ELSE 0 END`;

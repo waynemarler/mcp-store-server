@@ -12,8 +12,8 @@ const DiscoverServicesSchema = z.object({
 });
 
 const RouteRequestSchema = z.object({
-  capability: z.string(),
-  method: z.string(),
+  capability: z.string().optional(),
+  method: z.string().optional(),
   params: z.any().optional(),
   preferredServer: z.string().optional(),
 });

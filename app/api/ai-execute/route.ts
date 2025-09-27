@@ -20,10 +20,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (capabilities.length > 0) {
-      const capabilityConditions = capabilities.map((cap, index) =>
+      const capabilityConditions = capabilities.map((cap: string, index: number) =>
         `tools::text ILIKE $${queryParams.length + index + 1}`
       );
-      capabilities.forEach(cap => queryParams.push(`%${cap}%`));
+      capabilities.forEach((cap: string) => queryParams.push(`%${cap}%`));
       whereClause += ` AND (${capabilityConditions.join(' OR ')})`;
     }
 

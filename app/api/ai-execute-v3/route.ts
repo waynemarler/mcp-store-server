@@ -250,7 +250,7 @@ function rankServers(servers: any[], searchParams: any) {
 
     // Capability matching
     const toolsText = JSON.stringify(server.tools || {}).toLowerCase();
-    capabilities.forEach(cap => {
+    capabilities.forEach((cap: string) => {
       if (toolsText.includes(cap.toLowerCase())) score += 10;
     });
 
@@ -306,7 +306,7 @@ function findBestTool(tools: any[], intent: string, capabilities: string[], quer
     'stock_price': ['stock', 'quote', 'market'],
   };
 
-  const patterns = [...(intentPatterns[intent] || []), ...capabilities];
+  const patterns = [...((intentPatterns as any)[intent] || []), ...capabilities];
   if (query) patterns.push(query.toLowerCase());
 
   // Score tools quickly

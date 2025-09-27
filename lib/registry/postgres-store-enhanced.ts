@@ -516,6 +516,8 @@ export class EnhancedPostgresRegistryStore {
         ORDER BY use_count DESC, source_created_at DESC
       `;
 
+      console.log(`Enhanced store external query returned ${result.rows.length} servers`);
+
       const servers = result.rows.map(row => ({
         id: row.id,
         name: row.name,

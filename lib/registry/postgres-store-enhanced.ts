@@ -342,101 +342,128 @@ export class EnhancedPostgresRegistryStore {
     try {
       console.log('Enhanced Postgres discovery query:', query);
 
-      let whereConditions: string[] = ['1=1'];
-      const params: any[] = [];
-
-      if (query.capability) {
-        whereConditions.push(`
-          EXISTS (
-            SELECT 1 FROM server_capabilities sc
-            JOIN capabilities c ON sc.capability_id = c.id
-            WHERE sc.server_id = s.id AND c.capability_name = $${params.length + 1}
-          )
-        `);
-        params.push(query.capability);
-      }
-
-      if (query.category) {
-        whereConditions.push(`
-          EXISTS (
-            SELECT 1 FROM server_categories sc
-            JOIN categories c ON sc.category_id = c.id
-            WHERE sc.server_id = s.id AND (
-              c.main_category = $${params.length + 1} OR
-              c.sub_category = $${params.length + 1}
-            )
-          )
-        `);
-        params.push(query.category);
-      }
-
-      if (query.verified !== undefined) {
-        whereConditions.push(`s.verified = $${params.length + 1}`);
-        params.push(query.verified);
-      }
-
-      const queryText = `
-        SELECT DISTINCT
-          s.*,
-          a.name as author_name,
-          a.website as author_website,
-          a.contact_email as author_email,
-          a.created_at as author_created_at
-        FROM mcp_servers s
-        LEFT JOIN authors a ON s.author_id = a.id
-        WHERE ${whereConditions.join(' AND ')}
-        AND s.status = 'active'
-        ORDER BY s.trust_score DESC, s.created_at DESC
-      `;
-
-      const result = await sql.query(queryText, params);
+      // Get both internal enhanced servers and external Smithery servers
+      const [internalResult, externalResult] = await Promise.allSettled([
+        this.getInternalServers(query),
+        this.getExternalServers(query)
+      ]);
 
       const servers: MCPServerMetadata[] = [];
-      for (const row of result.rows) {
-        // Get categories for each server
-        const categoriesResult = await sql`
-          SELECT c.* FROM categories c
-          JOIN server_categories sc ON c.id = sc.category_id
-          WHERE sc.server_id = ${row.id}
-        `;
 
-        // Get capabilities
-        const capabilitiesResult = await sql`
-          SELECT cap.capability_name FROM capabilities cap
-          JOIN server_capabilities sc ON cap.id = sc.capability_id
-          WHERE sc.server_id = ${row.id}
-        `;
+      // Add internal servers
+      if (internalResult.status === 'fulfilled') {
+        servers.push(...internalResult.value);
+      }
 
-        // Get tags
-        const tagsResult = await sql`
-          SELECT t.tag_name FROM tags t
-          JOIN server_tags st ON t.id = st.tag_id
-          WHERE st.server_id = ${row.id}
-        `;
+      // Add external servers
+      if (externalResult.status === 'fulfilled') {
+        servers.push(...externalResult.value);
+      }
 
-        const categories = categoriesResult.rows.map(c => ({
-          id: c.id,
-          mainCategory: c.main_category,
-          subCategory: c.sub_category,
-          description: c.description
-        }));
+      console.log(`Enhanced store found ${servers.length} servers total (internal + external)`);
+      return servers.sort((a, b) => b.trustScore - a.trustScore);
+    } catch (error: any) {
+      console.error('Enhanced Postgres discovery error:', error.message);
+      return [];
+    }
+  }
 
-        servers.push({
-          id: row.id,
-          name: row.name,
-          description: row.description,
-          category: categories[0] ? `${categories[0].mainCategory}/${categories[0].subCategory}` : 'Uncategorized',
-          logoUrl: row.logo_url,
-          endpoint: row.endpoint,
-          apiKey: row.api_key,
-          type: row.type,
-          version: row.version,
-          author: row.author_id ? {
-            id: row.author_id,
-            name: row.author_name,
-            website: row.author_website,
-            contactEmail: row.author_email,
-            createdAt: new Date(row.author_created_at)
+  private async getInternalServers(query: DiscoveryQuery): Promise<MCPServerMetadata[]> {
+    let whereConditions: string[] = ['1=1'];
+    const params: any[] = [];
+
+    if (query.capability) {
+      whereConditions.push(`
+        EXISTS (
+          SELECT 1 FROM server_capabilities sc
+          JOIN capabilities c ON sc.capability_id = c.id
+          WHERE sc.server_id = s.id AND c.capability_name = $${params.length + 1}
+        )
+      `);
+      params.push(query.capability);
+    }
+
+    if (query.category) {
+      whereConditions.push(`
+        EXISTS (
+          SELECT 1 FROM server_categories sc
+          JOIN categories c ON sc.category_id = c.id
+          WHERE sc.server_id = s.id AND (
+            c.main_category = $${params.length + 1} OR
+            c.sub_category = $${params.length + 1}
+          )
+        )
+      `);
+      params.push(query.category);
+    }
+
+    if (query.verified !== undefined) {
+      whereConditions.push(`s.verified = $${params.length + 1}`);
+      params.push(query.verified);
+    }
+
+    const queryText = `
+      SELECT DISTINCT
+        s.*,
+        a.name as author_name,
+        a.website as author_website,
+        a.contact_email as author_email,
+        a.created_at as author_created_at
+      FROM mcp_servers s
+      LEFT JOIN authors a ON s.author_id = a.id
+      WHERE ${whereConditions.join(' AND ')}
+      AND s.status = 'active'
+      ORDER BY s.trust_score DESC, s.created_at DESC
+    `;
+
+    const result = await sql.query(queryText, params);
+
+    const servers: MCPServerMetadata[] = [];
+    for (const row of result.rows) {
+      // Get categories for each server
+      const categoriesResult = await sql`
+        SELECT c.* FROM categories c
+        JOIN server_categories sc ON c.id = sc.category_id
+        WHERE sc.server_id = ${row.id}
+      `;
+
+      // Get capabilities
+      const capabilitiesResult = await sql`
+        SELECT cap.capability_name FROM capabilities cap
+        JOIN server_capabilities sc ON cap.id = sc.capability_id
+        WHERE sc.server_id = ${row.id}
+      `;
+
+      // Get tags
+      const tagsResult = await sql`
+        SELECT t.tag_name FROM tags t
+        JOIN server_tags st ON t.id = st.tag_id
+        WHERE st.server_id = ${row.id}
+      `;
+
+      const categories = categoriesResult.rows.map(c => ({
+        id: c.id,
+        mainCategory: c.main_category,
+        subCategory: c.sub_category,
+        description: c.description
+      }));
+
+      servers.push({
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        category: categories[0] ? `${categories[0].mainCategory}/${categories[0].subCategory}` : 'Uncategorized',
+        logoUrl: row.logo_url,
+        endpoint: row.endpoint,
+        apiKey: row.api_key,
+        type: row.type,
+        version: row.version,
+        author: row.author_id ? {
+          id: row.author_id,
+          name: row.author_name,
+          website: row.author_website,
+          contactEmail: row.author_email,
+          createdAt: new Date(row.author_created_at)
           } as Author : undefined,
           categories,
           capabilities: capabilitiesResult.rows.map(c => c.capability_name),
@@ -450,10 +477,91 @@ export class EnhancedPostgresRegistryStore {
         });
       }
 
-      console.log(`Found ${servers.length} servers in enhanced Postgres`);
+      console.log(`Found ${servers.length} internal servers in enhanced Postgres`);
       return servers;
     } catch (error: any) {
-      console.error('Enhanced Postgres discovery error:', error.message);
+      console.error('Enhanced Postgres internal servers error:', error.message);
+      return [];
+    }
+  }
+
+  private async getExternalServers(query: DiscoveryQuery): Promise<MCPServerMetadata[]> {
+    try {
+      let whereClause = 'WHERE 1=1';
+      const params: any[] = [];
+
+      if (query.category) {
+        whereClause += ` AND category = $${params.length + 1}`;
+        params.push(query.category);
+      }
+
+      if (query.verified !== undefined) {
+        whereClause += ` AND is_verified = $${params.length + 1}`;
+        params.push(query.verified);
+      }
+
+      const queryText = `
+        SELECT
+          'ext_' || id as id, display_name as name, description,
+          category, '[]'::jsonb as capabilities,
+          deployment_url as endpoint, null as api_key,
+          is_verified as verified,
+          CASE WHEN use_count > 100 THEN 85 ELSE 70 END as trust_score,
+          source_created_at as last_health_check,
+          source_created_at as created_at, updated_at,
+          'external' as source, icon_url, qualified_name,
+          use_count, author, homepage, repository_url, source_url,
+          tools, tags, is_remote, security_scan_passed,
+          deployment_url, connections, downloads, version,
+          source_created_at, fetched_at, api_source, raw_json
+        FROM smithery_mcp_servers
+        ${whereClause}
+        ORDER BY use_count DESC, source_created_at DESC
+      `;
+
+      const result = await sql.query(queryText, params);
+
+      const servers = result.rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        display_name: row.name,
+        qualified_name: row.qualified_name,
+        description: row.description,
+        category: row.category,
+        capabilities: row.capabilities,
+        endpoint: row.endpoint || 'https://smithery.ai',
+        apiKey: row.api_key,
+        verified: row.verified,
+        trustScore: row.trust_score,
+        status: 'active' as const,
+        lastHealthCheck: row.last_health_check ? new Date(row.last_health_check) : undefined,
+        createdAt: new Date(row.created_at),
+        updatedAt: new Date(row.updated_at),
+        // Additional Smithery fields
+        icon_url: row.icon_url,
+        use_count: row.use_count,
+        author: row.author,
+        homepage: row.homepage,
+        repository_url: row.repository_url,
+        source_url: row.source_url,
+        tools: row.tools,
+        tags: row.tags,
+        is_remote: row.is_remote,
+        security_scan_passed: row.security_scan_passed,
+        deployment_url: row.deployment_url,
+        connections: row.connections,
+        downloads: row.downloads,
+        version: row.version,
+        source_created_at: row.source_created_at,
+        fetched_at: row.fetched_at,
+        api_source: row.api_source,
+        raw_json: row.raw_json
+      }));
+
+      console.log(`Found ${servers.length} external servers from Smithery`);
+      return servers;
+    } catch (error: any) {
+      console.error('Enhanced Postgres external servers error:', error.message);
       return [];
     }
   }

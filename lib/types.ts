@@ -41,6 +41,24 @@ export interface MCPServerMetadata {
   lastHealthCheck?: Date;
   createdAt: Date;
   updatedAt: Date;
+  // Smithery-specific fields
+  display_name?: string;
+  qualified_name?: string;
+  icon_url?: string;
+  use_count?: number;
+  homepage?: string;
+  repository_url?: string;
+  source_url?: string;
+  tools?: any[];
+  is_remote?: boolean;
+  security_scan_passed?: boolean;
+  deployment_url?: string;
+  connections?: any[];
+  downloads?: number;
+  source_created_at?: string;
+  fetched_at?: string;
+  api_source?: string;
+  raw_json?: any;
 }
 
 // Interface for creating servers with partial author data

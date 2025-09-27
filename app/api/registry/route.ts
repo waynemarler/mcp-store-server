@@ -36,9 +36,33 @@ const RegisterSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const pageSize = parseInt(searchParams.get('pageSize') || '50');
+    const page = parseInt(searchParams.get('page') || '1');
+    const query = searchParams.get('q') || '';
+
     const servers = await registry.getAllServers();
+
+    // Filter servers if query provided
+    let filteredServers = servers;
+    if (query) {
+      const lowerQuery = query.toLowerCase();
+      filteredServers = servers.filter(s =>
+        s.name?.toLowerCase().includes(lowerQuery) ||
+        s.description?.toLowerCase().includes(lowerQuery) ||
+        s.category?.toLowerCase().includes(lowerQuery) ||
+        (s as any).qualified_name?.toLowerCase().includes(lowerQuery) ||
+        (s as any).author?.toLowerCase().includes(lowerQuery)
+      );
+    }
+
+    // Paginate results
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const paginatedServers = filteredServers.slice(startIndex, endIndex);
+
     return Response.json({
-      servers: servers.map((s) => ({
+      servers: paginatedServers.map((s) => ({
         id: s.id,
         name: s.name,
         description: s.description,
@@ -51,7 +75,36 @@ export async function GET(request: NextRequest) {
         verified: s.verified,
         trustScore: s.trustScore,
         lastHealthCheck: s.lastHealthCheck,
+        // Smithery fields
+        display_name: (s as any).display_name,
+        qualified_name: (s as any).qualified_name,
+        icon_url: (s as any).icon_url,
+        use_count: (s as any).use_count,
+        author: (s as any).author,
+        homepage: (s as any).homepage,
+        repository_url: (s as any).repository_url,
+        source_url: (s as any).source_url,
+        tools: (s as any).tools,
+        tags: (s as any).tags,
+        is_remote: (s as any).is_remote,
+        security_scan_passed: (s as any).security_scan_passed,
+        deployment_url: (s as any).deployment_url,
+        connections: (s as any).connections,
+        downloads: (s as any).downloads,
+        version: (s as any).version,
+        source_created_at: (s as any).source_created_at,
+        fetched_at: (s as any).fetched_at,
+        api_source: (s as any).api_source,
+        raw_json: (s as any).raw_json,
       })),
+      pagination: {
+        page,
+        pageSize,
+        totalCount: filteredServers.length,
+        totalPages: Math.ceil(filteredServers.length / pageSize),
+        hasNext: endIndex < filteredServers.length,
+        hasPrev: page > 1
+      }
     });
   } catch (error: any) {
     return Response.json({ error: error.message }, { status: 500 });

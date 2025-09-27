@@ -210,26 +210,98 @@ export class PostgresRegistryStore {
 
   async getAllServers(): Promise<MCPServerMetadata[]> {
     try {
-      const result = await sql`
-        SELECT * FROM mcp_servers
-        ORDER BY trust_score DESC, created_at DESC
-      `;
+      // Get both internal and external servers
+      const [internalResult, externalResult] = await Promise.allSettled([
+        sql`
+          SELECT
+            id, name, description, category, capabilities, endpoint,
+            api_key, verified, trust_score, last_health_check,
+            created_at, updated_at, 'internal' as source
+          FROM mcp_servers
+          ORDER BY trust_score DESC, created_at DESC
+        `,
+        sql`
+          SELECT
+            'ext_' || id as id, display_name as name, description,
+            category, '[]'::jsonb as capabilities,
+            deployment_url as endpoint, null as api_key,
+            is_verified as verified,
+            CASE WHEN use_count > 100 THEN 85 ELSE 70 END as trust_score,
+            source_created_at as last_health_check,
+            source_created_at as created_at, updated_at,
+            'external' as source, icon_url, qualified_name,
+            use_count, author, homepage, repository_url, source_url,
+            tools, tags, is_remote, security_scan_passed,
+            deployment_url, connections, downloads, version,
+            source_created_at, fetched_at, api_source, raw_json
+          FROM smithery_mcp_servers
+          ORDER BY use_count DESC, source_created_at DESC
+        `
+      ]);
 
-      return result.rows.map(row => ({
-        id: row.id,
-        name: row.name,
-        description: row.description,
-        category: row.category,
-        capabilities: row.capabilities,
-        endpoint: row.endpoint,
-        apiKey: row.api_key,
-        verified: row.verified,
-        trustScore: row.trust_score,
-        status: 'active' as const,
-        lastHealthCheck: row.last_health_check ? new Date(row.last_health_check) : undefined,
-        createdAt: new Date(row.created_at),
-        updatedAt: new Date(row.updated_at)
-      }));
+      const servers: MCPServerMetadata[] = [];
+
+      // Add internal servers
+      if (internalResult.status === 'fulfilled') {
+        servers.push(...internalResult.value.rows.map(row => ({
+          id: row.id,
+          name: row.name,
+          description: row.description,
+          category: row.category,
+          capabilities: row.capabilities,
+          endpoint: row.endpoint,
+          apiKey: row.api_key,
+          verified: row.verified,
+          trustScore: row.trust_score,
+          status: 'active' as const,
+          lastHealthCheck: row.last_health_check ? new Date(row.last_health_check) : undefined,
+          createdAt: new Date(row.created_at),
+          updatedAt: new Date(row.updated_at)
+        })));
+      }
+
+      // Add external servers
+      if (externalResult.status === 'fulfilled') {
+        servers.push(...externalResult.value.rows.map(row => ({
+          id: row.id,
+          name: row.name,
+          display_name: row.name,
+          qualified_name: row.qualified_name,
+          description: row.description,
+          category: row.category,
+          capabilities: row.capabilities,
+          endpoint: row.endpoint || 'https://smithery.ai',
+          apiKey: row.api_key,
+          verified: row.verified,
+          trustScore: row.trust_score,
+          status: 'active' as const,
+          lastHealthCheck: row.last_health_check ? new Date(row.last_health_check) : undefined,
+          createdAt: new Date(row.created_at),
+          updatedAt: new Date(row.updated_at),
+          // Additional Smithery fields
+          icon_url: row.icon_url,
+          use_count: row.use_count,
+          author: row.author,
+          homepage: row.homepage,
+          repository_url: row.repository_url,
+          source_url: row.source_url,
+          tools: row.tools,
+          tags: row.tags,
+          is_remote: row.is_remote,
+          security_scan_passed: row.security_scan_passed,
+          deployment_url: row.deployment_url,
+          connections: row.connections,
+          downloads: row.downloads,
+          version: row.version,
+          source_created_at: row.source_created_at,
+          fetched_at: row.fetched_at,
+          api_source: row.api_source,
+          raw_json: row.raw_json
+        })));
+      }
+
+      console.log(`Found ${servers.length} servers total (internal + external)`);
+      return servers.sort((a, b) => b.trustScore - a.trustScore);
     } catch (error: any) {
       console.error('Error getting all servers from Postgres:', error.message);
       return [];

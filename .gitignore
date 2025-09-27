@@ -41,3 +41,18 @@ next-env.d.ts
 
 # claude
 .claude/
+
+# development and testing files
+*.example.smithery
+test-db.js
+migrate-*.js
+run-migration.js
+setup-*.js
+sync-*.js
+optimize-*.js
+
+# database schema files (development)
+db-schema-*.sql
+
+# sync logs
+sync.log

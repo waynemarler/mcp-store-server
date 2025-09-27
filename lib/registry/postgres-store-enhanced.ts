@@ -464,16 +464,16 @@ export class EnhancedPostgresRegistryStore {
           website: row.author_website,
           contactEmail: row.author_email,
           createdAt: new Date(row.author_created_at)
-          } as Author : undefined,
-          categories,
-          capabilities: capabilitiesResult.rows.map(c => c.capability_name),
-          tags: tagsResult.rows.map(t => t.tag_name),
-          verified: row.verified,
-          trustScore: row.trust_score,
-          status: row.status,
-          lastHealthCheck: row.last_health_check ? new Date(row.last_health_check) : undefined,
-          createdAt: new Date(row.created_at),
-          updatedAt: new Date(row.updated_at)
+        } as Author : undefined,
+        categories,
+        capabilities: capabilitiesResult.rows.map(c => c.capability_name),
+        tags: tagsResult.rows.map(t => t.tag_name),
+        verified: row.verified,
+        trustScore: row.trust_score,
+        status: row.status,
+        lastHealthCheck: row.last_health_check ? new Date(row.last_health_check) : undefined,
+        createdAt: new Date(row.created_at),
+        updatedAt: new Date(row.updated_at)
         });
       }
 

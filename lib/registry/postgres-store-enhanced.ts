@@ -488,7 +488,7 @@ export class EnhancedPostgresRegistryStore {
 
   private async getExternalServers(query: DiscoveryQuery): Promise<MCPServerMetadata[]> {
     try {
-      // Use the same approach as the regular postgres store - just query all servers
+      // Just get all servers like the regular store does, we'll filter in application code
       const result = await sql`
         SELECT
           'ext_' || id as id, display_name as name, description,
@@ -546,7 +546,7 @@ export class EnhancedPostgresRegistryStore {
         raw_json: row.raw_json
       }));
 
-      // Apply filtering at application level (like the regular store does)
+      // Apply filtering at application level
       if (query.category) {
         servers = servers.filter(server => server.category === query.category);
       }

@@ -37,7 +37,7 @@ const RegisterSchema = z.object({
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const pageSize = parseInt(searchParams.get('pageSize') || '50');
+    const pageSize = parseInt(searchParams.get('pageSize') || '1000');
     const page = parseInt(searchParams.get('page') || '1');
     const query = searchParams.get('q') || '';
 

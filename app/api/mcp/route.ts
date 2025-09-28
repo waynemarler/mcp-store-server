@@ -156,6 +156,29 @@ async function handleMCPMessage(message: any) {
                   properties: {},
                 },
               },
+              {
+                name: "execute_query",
+                description: "Execute any natural language query by intelligently routing to the best MCP server. Handles weather, crypto prices, web search, translations, and more.",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    query: {
+                      type: "string",
+                      description: "Natural language query (e.g., 'weather in Tokyo', 'Bitcoin price', 'translate hello to Spanish')"
+                    },
+                    context: {
+                      type: "object",
+                      description: "Optional context for multi-step conversations",
+                      properties: {
+                        location: { type: "string" },
+                        previousQuery: { type: "string" },
+                        sessionId: { type: "string" }
+                      }
+                    }
+                  },
+                  required: ["query"]
+                }
+              },
             ],
           },
         });
@@ -309,6 +332,21 @@ async function handleMCPMessage(message: any) {
               },
             });
 
+          case "execute_query":
+            const queryResult = await handleExecuteQuery(args);
+            return Response.json({
+              jsonrpc: "2.0",
+              id,
+              result: {
+                content: [
+                  {
+                    type: "text",
+                    text: queryResult,
+                  },
+                ],
+              },
+            });
+
           default:
             return Response.json({
               jsonrpc: "2.0",
@@ -408,6 +446,90 @@ async function handleDirectAPI(body: any) {
   } catch (error: any) {
     return Response.json({ error: error.message }, { status: 500 });
   }
+}
+
+// Handle intelligent query execution using our NLP routing system
+async function handleExecuteQuery(args: any): Promise<string> {
+  const { query, context = {} } = args;
+
+  try {
+    // Call our intelligent NLP routing system
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3004';
+
+    const response = await fetch(`${baseUrl}/api/execute-nlp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query,
+        context,
+        sessionId: context.sessionId || 'mcp-session'
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Execute API failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    // Format the result for Claude
+    return formatExecutionResult(result);
+
+  } catch (error: any) {
+    return `❌ Query execution failed: ${error.message}`;
+  }
+}
+
+// Format execution result for Claude display
+function formatExecutionResult(result: any): string {
+  if (!result.success) {
+    return `❌ Query failed: ${result.error || 'Unknown error'}`;
+  }
+
+  const { query, result: data, metadata } = result;
+
+  let output = `✅ **Query**: ${query}\n\n`;
+
+  // Format result based on type
+  if (data) {
+    if (data.temperature) {
+      // Weather result
+      output += `🌤️ **Weather**: ${data.location}\n`;
+      output += `Temperature: ${data.temperature}\n`;
+      output += `Condition: ${data.condition}\n`;
+      output += `Humidity: ${data.humidity}\n`;
+    } else if (data.price) {
+      // Crypto/Stock result
+      output += `💰 **Price**: ${data.symbol}\n`;
+      output += `Current: ${data.price}\n`;
+      output += `24h Change: ${data.change_24h || data.change}\n`;
+      if (data.volume_24h || data.volume) {
+        output += `Volume: ${data.volume_24h || data.volume}\n`;
+      }
+    } else if (data.type === 'options') {
+      // Options result
+      output += `🔍 **${data.message}**\n\n`;
+      if (data.options && data.options.length > 0) {
+        output += `Available options:\n`;
+        data.options.forEach((option: any, i: number) => {
+          output += `${i + 1}. **${option.name}** - ${option.description}\n`;
+        });
+      }
+      output += `\n${data.nextStep}`;
+    } else {
+      // Generic result
+      output += `📋 **Result**: ${JSON.stringify(data, null, 2)}`;
+    }
+  }
+
+  output += `\n\n🚀 **Performance**: ${metadata?.totalTime} (via ${metadata?.server})`;
+  output += `\n🎯 **Confidence**: ${Math.round((metadata?.confidence || 0) * 100)}%`;
+
+  return output;
 }
 
 async function handleRouteRequest(

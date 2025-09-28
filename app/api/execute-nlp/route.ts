@@ -8,9 +8,10 @@ const executeCache = new Map<string, { data: any, timestamp: number }>();
 const CACHE_TTL = 300000; // 5 minutes
 
 export async function POST(request: NextRequest) {
+  let body: any = {};
   try {
     const startTime = Date.now();
-    const body = await request.json();
+    body = await request.json();
     const { query, sessionId, context = {}, userId, intent, capabilities, category, entities } = body;
 
     // Handle both NLP strings AND structured input

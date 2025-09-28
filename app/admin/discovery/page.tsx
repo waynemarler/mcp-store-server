@@ -54,7 +54,7 @@ export default function AdminDiscoveryPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/discovery/catalog?${selectedStatus !== 'all' ? `status=${selectedStatus}&` : ''}limit=50`);
+      const response = await fetch(`/api/discovery/catalog?${selectedStatus !== 'all' ? `status=${selectedStatus}&` : ''}limit=1000`);
       const data = await response.json();
 
       if (data.success) {

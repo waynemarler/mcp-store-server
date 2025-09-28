@@ -488,16 +488,7 @@ export class EnhancedPostgresRegistryStore {
 
   private async getExternalServers(query: DiscoveryQuery): Promise<MCPServerMetadata[]> {
     try {
-      let whereClause = 'WHERE 1=1';
-
-      if (query.category) {
-        whereClause += ` AND category = '${query.category}'`;
-      }
-
-      if (query.verified !== undefined) {
-        whereClause += ` AND is_verified = ${query.verified}`;
-      }
-
+      // Just get all servers like the regular store does, we'll filter in application code
       const result = await sql`
         SELECT
           'ext_' || id as id, display_name as name, description,
@@ -518,7 +509,7 @@ export class EnhancedPostgresRegistryStore {
 
       console.log(`Enhanced store external query returned ${result.rows.length} servers`);
 
-      const servers = result.rows.map(row => ({
+      let servers = result.rows.map(row => ({
         id: row.id,
         name: row.name,
         display_name: row.name,
@@ -555,7 +546,16 @@ export class EnhancedPostgresRegistryStore {
         raw_json: row.raw_json
       }));
 
-      console.log(`Found ${servers.length} external servers from Smithery`);
+      // Apply filtering at application level
+      if (query.category) {
+        servers = servers.filter(server => server.category === query.category);
+      }
+
+      if (query.verified !== undefined) {
+        servers = servers.filter(server => server.verified === query.verified);
+      }
+
+      console.log(`Found ${servers.length} external servers from Smithery (after filtering)`);
       return servers;
     } catch (error: any) {
       console.error('Enhanced Postgres external servers error:', error.message);

@@ -542,10 +542,10 @@ async function handleGetFeedbackStatus(args: any, id: any) {
         output += `   ID: \`${item.id}\`\n`;
         output += `   ${severityIcon} Severity: ${item.severity} | Priority: ${item.priority_score}/100\n`;
         output += `   Status: ${item.status.toUpperCase()}\n`;
-        output += `   Issue: ${item.current_behavior.substring(0, 100)}${item.current_behavior.length > 100 ? '...' : ''}\n`;
+        output += `   Issue: ${item.current_behavior}\n`;
 
         if (item.fix_description) {
-          output += `   Fix: ${item.fix_description.substring(0, 100)}${item.fix_description.length > 100 ? '...' : ''}\n`;
+          output += `   Fix: ${item.fix_description}\n`;
         }
 
         if (item.test_query) {

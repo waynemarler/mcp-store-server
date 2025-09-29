@@ -27,7 +27,19 @@ const STATIC_TOP_SERVERS = [
   { display_name: "Bitcoin Wallet", category: "finance", keywords: ["bitcoin", "btc", "wallet"], use_count: 1400 },
   { display_name: "Language Detector", category: "language", keywords: ["detect", "language", "identify"], use_count: 1200 },
   { display_name: "Recipe Finder", category: "food", keywords: ["recipe", "cooking", "ingredients"], use_count: 1000 },
-  { display_name: "Uber Integration", category: "travel", keywords: ["uber", "taxi", "ride"], use_count: 800 }
+  { display_name: "Uber Integration", category: "travel", keywords: ["uber", "taxi", "ride"], use_count: 800 },
+  // EDUCATIONAL & LEARNING - Missing coverage area!
+  { display_name: "Guitar Learning Hub", category: "education", keywords: ["guitar", "learn", "music", "lessons", "chords", "practice"], use_count: 750 },
+  { display_name: "Online Courses", category: "education", keywords: ["course", "tutorial", "learning", "education", "skill"], use_count: 700 },
+  { display_name: "Piano Tutor", category: "education", keywords: ["piano", "keyboard", "music", "learn", "lessons"], use_count: 650 },
+  { display_name: "Language Learning", category: "education", keywords: ["learn", "language", "study", "practice", "fluent"], use_count: 600 },
+  { display_name: "Fitness Trainer", category: "health", keywords: ["fitness", "workout", "exercise", "training", "gym"], use_count: 550 },
+  { display_name: "Cooking Classes", category: "education", keywords: ["cooking", "chef", "culinary", "kitchen", "learn"], use_count: 500 },
+  // CREATIVE & HOBBIES
+  { display_name: "Art Studio", category: "creative", keywords: ["art", "drawing", "painting", "creative", "design"], use_count: 450 },
+  { display_name: "Photography Guide", category: "creative", keywords: ["photography", "camera", "photo", "picture", "lens"], use_count: 400 },
+  { display_name: "Gardening Helper", category: "lifestyle", keywords: ["garden", "plants", "grow", "seeds", "flowers"], use_count: 350 },
+  { display_name: "Pet Care Assistant", category: "lifestyle", keywords: ["pet", "dog", "cat", "animal", "care"], use_count: 300 }
 ];
 
 // Static index built at module load time (0ms runtime cost)

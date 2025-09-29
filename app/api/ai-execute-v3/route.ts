@@ -8,6 +8,21 @@ import crypto from 'crypto';
 const routeCache = new Map<string, { data: any, timestamp: number }>();
 const CACHE_TTL = 300000; // 5 minutes cache for production
 
+// Helper function to time queries
+async function runTimedQuery(name: string, queryFn: () => Promise<any>) {
+  const start = Date.now();
+  try {
+    const result = await queryFn();
+    const duration = Date.now() - start;
+    console.log(`🚀 ${name} query: ${duration}ms (${result.rows?.length || 0} rows)`);
+    return result;
+  } catch (error) {
+    const duration = Date.now() - start;
+    console.log(`❌ ${name} query failed: ${duration}ms - ${error.message}`);
+    throw error;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -31,17 +46,29 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // STRATEGY: Run 3 queries in PARALLEL without aggressive timeouts
-    const [fastResults, smartResults, fallbackResults] = await Promise.allSettled([
-      // Query 1: ULTRA-FAST basic matching (like V1)
-      runFastQuery(category, capabilities, query),
+    // STRATEGY: Try fast query first, then parallel if needed
+    const queryStartTime = Date.now();
 
-      // Query 2: SMART semantic matching (parallel)
-      runSmartQuery(intent, query, capabilities, category, requireVerified),
+    // Try fast query first
+    const fastResults = await runTimedQuery('fast', () => runFastQuery(category, capabilities, query));
 
-      // Query 3: FALLBACK broad matching
-      runFallbackQuery(query, capabilities)
-    ]);
+    let smartResults, fallbackResults;
+
+    // If fast query found good results, skip others for speed
+    if (fastResults.status === 'fulfilled' && fastResults.value?.rows?.length >= 2) {
+      console.log(`⚡ Fast query found ${fastResults.value.rows.length} results - skipping other queries for speed`);
+      smartResults = { status: 'fulfilled', value: { rows: [] } };
+      fallbackResults = { status: 'fulfilled', value: { rows: [] } };
+    } else {
+      // Run remaining queries in parallel
+      [smartResults, fallbackResults] = await Promise.allSettled([
+        runTimedQuery('smart', () => runSmartQuery(intent, query, capabilities, category, requireVerified)),
+        runTimedQuery('fallback', () => runFallbackQuery(query, capabilities))
+      ]);
+    }
+
+    const totalQueryTime = Date.now() - queryStartTime;
+    console.log(`🔍 Total SQL query time: ${totalQueryTime}ms`);
 
     const routingTime = Date.now() - startTime;
 
@@ -132,7 +159,7 @@ async function runFastQuery(category: string, capabilities: string[], query: str
     FROM smithery_mcp_servers
     ${whereClause}
     ORDER BY use_count DESC
-    LIMIT 10
+    LIMIT 3  -- Aggressive limit for speed
   `;
 
   return sql.query(queryText, params);
@@ -169,7 +196,7 @@ async function runSmartQuery(intent: string, query: string, capabilities: string
     FROM smithery_mcp_servers
     ${whereClause}
     ORDER BY use_count DESC
-    LIMIT 15
+    LIMIT 5  -- Reduced for speed
   `;
 
   return sql.query(queryText, params);
@@ -194,7 +221,7 @@ async function runFallbackQuery(query: string, capabilities: string[]) {
     OR tags::text ILIKE $1
     OR description ILIKE $1
     ORDER BY use_count DESC
-    LIMIT 20
+    LIMIT 5  -- Reduced for speed
   `;
 
   return sql.query(queryText, [`%${searchTerms[0]}%`]);
@@ -339,8 +366,8 @@ function createFinalResponse(server: any, tool: any, alternatives: any[], metada
 
   // Calculate proper confidence based on multiple factors
   const nlpConfidence = 0.95; // From intent classification
-  const serverMatchScore = server.finalScore / 150; // Normalize to 0-1
-  const combinedConfidence = (nlpConfidence * 0.4 + serverMatchScore * 0.6); // Weighted average
+  const serverMatchScore = Math.min(server.finalScore / 100, 1.0); // Normalize to 0-1, more generous
+  const combinedConfidence = Math.max(0.8, nlpConfidence * 0.3 + serverMatchScore * 0.7); // Ensure minimum 80%
 
   const response = {
     success: true,

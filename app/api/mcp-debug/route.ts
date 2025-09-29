@@ -317,6 +317,13 @@ function formatDebugOutput(query: string, result: any, debugLog: any, debugLevel
         output += `  • Server: ${step.details.selectedServer}\n`;
         output += `  • Tool: ${step.details.selectedTool}\n`;
       }
+      if (step.serverCandidates && step.serverCandidates.length > 0) {
+        output += `  • Evaluated ${step.serverCandidates.length} servers\n`;
+        output += `  • Winner: ${step.serverCandidates[0].name} (${Math.round(step.serverCandidates[0].confidence * 100)}%)\n`;
+        if (step.serverCandidates.length > 1) {
+          output += `  • Runner-up: ${step.serverCandidates[1].name} (${Math.round(step.serverCandidates[1].confidence * 100)}%)\n`;
+        }
+      }
     }
 
     if (step.duration) {

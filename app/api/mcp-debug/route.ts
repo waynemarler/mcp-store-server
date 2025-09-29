@@ -205,14 +205,15 @@ async function handleExecuteQueryWithDebug(args: any): Promise<string> {
       });
 
       // If we have routing debug info (from ai-execute-v3)
-      if (executeResult.debugInfo?.routing) {
+      if (executeResult.metadata?.serverCandidates) {
         debugLog.steps.push({
           step: 4,
-          name: "SQL_QUERIES_EXECUTED",
-          description: "Database queries for server discovery",
-          queries: executeResult.debugInfo.routing.queries || [],
-          serversFound: executeResult.debugInfo.routing.serversFound || 0,
-          rankingDetails: executeResult.debugInfo.routing.ranking || {}
+          name: "SERVER_CANDIDATES_EVALUATION",
+          description: "Server selection and ranking",
+          serverCandidates: executeResult.metadata.serverCandidates,
+          scoringDetails: executeResult.metadata.scoringDetails,
+          queryStrategy: executeResult.metadata.queryStrategy,
+          serversEvaluated: executeResult.metadata.serversEvaluated
         });
       }
 

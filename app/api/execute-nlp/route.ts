@@ -11,8 +11,12 @@ export async function POST(request: NextRequest) {
   let body: any = {};
   try {
     const startTime = Date.now();
+
+    // Check if debug mode is requested
+    const isDebugRequest = request.headers.get('X-Debug-Mode') === 'true';
+
     body = await request.json();
-    const { query, sessionId, context = {}, userId, intent, capabilities, category, entities } = body;
+    const { query, sessionId, context = {}, userId, intent, capabilities, category, entities, returnDebugInfo } = body;
 
     // Handle both NLP strings AND structured input
     const isStructuredInput = intent && capabilities;
@@ -98,8 +102,26 @@ export async function POST(request: NextRequest) {
         tool: executionResult.metadata?.tool,
         confidence: executionResult.metadata?.confidence,
         cached: false,
-        engine: "nlp-execute-v1"
-      }
+        engine: "nlp-execute-v1",
+        usingMocks: executionResult.metadata?.usingMocks
+      },
+      // Include debug info if requested
+      debugInfo: (isDebugRequest || returnDebugInfo) ? {
+        ...executionResult.debugInfo,
+        parsing: {
+          intent: parseResult.intent,
+          confidence: parseResult.confidence,
+          entities: parseResult.entities,
+          capabilities: parseResult.capabilities,
+          category: parseResult.category,
+          normalizedQuery: parseResult.normalizedQuery
+        },
+        timing: {
+          parseTime,
+          routeTime,
+          totalTime
+        }
+      } : undefined
     };
 
     // Cache successful results
@@ -144,37 +166,125 @@ async function parseQuery(query: string, context: any = {}) {
   };
 }
 
-// Execute the query using simplified logic (avoiding import issues)
+// Execute the query by calling the actual ai-execute-v3 endpoint
 async function executeQuery(parseResult: any) {
   try {
-    const { intent, capabilities, category } = parseResult;
+    const { intent, capabilities, category, entities } = parseResult;
     const query = parseResult.originalQuery;
 
-    // For now, let's just return mock results to test the pipeline
-    // We can integrate with the database later
-    const mockResult = getMockResult(intent, query);
+    // Determine if we should use real routing or fallback to mocks
+    const useRealRouting = process.env.USE_AI_ROUTING !== 'false';
+    const isDebugMode = process.env.NODE_ENV === 'development';
 
+    if (!useRealRouting) {
+      // Fallback to mock results for testing
+      const mockResult = getMockResult(intent, query);
+      return {
+        success: true,
+        result: mockResult,
+        metadata: {
+          server: "MockServer",
+          serverId: "@mock/test",
+          tool: "mock_tool",
+          confidence: 0.95,
+          alternatives: [],
+          usingMocks: true
+        }
+      };
+    }
+
+    // Call the actual AI routing endpoint
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ||
+                   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+
+    const routingResponse = await fetch(`${baseUrl}/api/ai-execute-v3`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        intent: intent,
+        query: query,
+        capabilities: capabilities,
+        category: category,
+        params: entities,
+        requireVerified: true
+      })
+    });
+
+    const routingResult = await routingResponse.json();
+
+    if (!routingResult.success) {
+      // If routing fails, fallback to mock
+      if (isDebugMode) {
+        console.log('Routing failed, using mock fallback:', routingResult.error);
+      }
+
+      const mockResult = getMockResult(intent, query);
+      return {
+        success: true,
+        result: mockResult,
+        metadata: {
+          server: "MockFallback",
+          serverId: "@mock/fallback",
+          tool: "mock_tool",
+          confidence: 0.5,
+          alternatives: [],
+          routingError: routingResult.error,
+          usingMocks: true
+        }
+      };
+    }
+
+    // Return the actual routing result
     return {
       success: true,
-      result: mockResult,
+      result: routingResult.result,
       metadata: {
-        server: "MockWeatherServer",
-        serverId: "@mock/weather",
-        tool: "get_current_weather",
-        confidence: 0.95,
-        alternatives: []
-      }
+        server: routingResult.metadata?.server,
+        serverId: routingResult.metadata?.serverId,
+        tool: routingResult.metadata?.tool,
+        confidence: routingResult.metadata?.confidence,
+        alternatives: routingResult.metadata?.alternatives || [],
+        routingTime: routingResult.metadata?.routingTime,
+        strategy: routingResult.metadata?.strategy,
+        cached: routingResult.metadata?.cached,
+        usingMocks: false
+      },
+      debugInfo: isDebugMode ? {
+        routing: {
+          queries: routingResult.metadata?.queriesExecuted,
+          serversFound: routingResult.metadata?.serversEvaluated,
+          ranking: routingResult.metadata?.rankingDetails
+        }
+      } : undefined
     };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Query execution error:', error);
-    return {
-      success: false,
-      result: null,
-      metadata: {
-        error: error.message
-      }
-    };
+
+    // On error, try to return mock result as fallback
+    try {
+      const mockResult = getMockResult(parseResult.intent, parseResult.originalQuery);
+      return {
+        success: true,
+        result: mockResult,
+        metadata: {
+          server: "ErrorFallback",
+          serverId: "@mock/error",
+          tool: "mock_tool",
+          confidence: 0.3,
+          error: error.message,
+          usingMocks: true
+        }
+      };
+    } catch (mockError) {
+      return {
+        success: false,
+        result: null,
+        metadata: {
+          error: error.message
+        }
+      };
+    }
   }
 }
 

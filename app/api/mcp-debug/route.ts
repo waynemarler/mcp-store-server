@@ -148,8 +148,8 @@ async function handleExecuteQueryWithDebug(args: any): Promise<string> {
       }
     });
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ||
-                   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+    // Use the actual deployed URL directly to avoid environment variable issues
+    const baseUrl = 'https://mcp-store-server.vercel.app';
 
     const executeResponse = await fetch(`${baseUrl}/api/execute-nlp`, {
       method: 'POST',

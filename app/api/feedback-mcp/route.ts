@@ -1,7 +1,9 @@
 import { NextRequest } from "next/server";
+import { emitNotification, type NotificationEvent } from './notifications/route';
 
 // CLAUDE-TO-CLAUDE FEEDBACK LOOP - REVOLUTIONARY AI DEVELOPMENT SYSTEM
 // First-ever autonomous feedback system between Claude Frontend and Claude Dev
+// NOW WITH PUSH NOTIFICATIONS for truly autonomous operation!
 
 // Database connection will be established once
 let dbInitialized = false;
@@ -261,6 +263,32 @@ async function handleMCPMessage(message: any) {
                   },
                   required: ["feedback_id"]
                 }
+              },
+              {
+                name: "subscribe_notifications",
+                description: "Subscribe to real-time push notifications for autonomous feedback loop. Returns SSE endpoint URL for Claude Desktop to connect.",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    client_id: {
+                      type: "string",
+                      description: "Unique identifier for this Claude instance (e.g., 'claude-desktop-main')"
+                    },
+                    notification_types: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        enum: ["feedback_created", "status_updated", "deployment_ready", "test_requested", "fix_deployed"]
+                      },
+                      description: "Types of notifications to receive (default: all)"
+                    },
+                    replay_recent: {
+                      type: "boolean",
+                      description: "Whether to replay recent events on connection (default: true)"
+                    }
+                  },
+                  required: ["client_id"]
+                }
               }
             ]
           }
@@ -278,6 +306,9 @@ async function handleMCPMessage(message: any) {
 
           case "update_feedback_status":
             return await handleUpdateFeedbackStatus(args, id);
+
+          case "subscribe_notifications":
+            return await handleSubscribeNotifications(args, id);
 
           default:
             return Response.json({
@@ -353,6 +384,21 @@ async function handleSubmitFeedback(args: any, id: any) {
     const responseTime = Date.now() - startTime;
 
     console.log(`🔔 NEW ${severity.toUpperCase()} FEEDBACK: ${component} - ${feedback_type} (ID: ${feedbackItem.id})`);
+
+    // EMIT PUSH NOTIFICATION for new feedback
+    emitNotification({
+      type: 'feedback_created',
+      feedbackId: feedbackItem.id,
+      data: {
+        feedback_type,
+        component,
+        severity,
+        priority_score: feedbackItem.priority_score,
+        test_query,
+        message: `New ${severity} ${feedback_type} for ${component}: ${current_behavior.substring(0, 100)}...`
+      },
+      timestamp: new Date().toISOString()
+    });
 
     return Response.json({
       jsonrpc: "2.0",
@@ -617,6 +663,24 @@ async function handleUpdateFeedbackStatus(args: any, id: any) {
 
     console.log(`📝 FEEDBACK UPDATED: ${feedback_id} → ${status || 'status unchanged'}`);
 
+    // EMIT PUSH NOTIFICATION for status update
+    if (status) {
+      const notificationType = status === 'deployed' ? 'deployment_ready' :
+                               status === 'fixed' ? 'fix_deployed' : 'status_updated';
+
+      emitNotification({
+        type: notificationType,
+        feedbackId: feedback_id,
+        data: {
+          status: updatedItem.status,
+          fix_description,
+          verification_status: updatedItem.verification_status,
+          message: `Feedback ${feedback_id} status changed to ${status}${status === 'deployed' ? ' - Ready for testing!' : ''}`
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+
     return Response.json({
       jsonrpc: "2.0",
       id,
@@ -656,6 +720,84 @@ ${status === 'verified' ? '🎉 **Feedback loop completed successfully!**' : ''}
 }
 
 // GET endpoint for monitoring and stats
+async function handleSubscribeNotifications(args: any, id: any) {
+  const { client_id, notification_types, replay_recent = true } = args;
+
+  // Get the base URL from environment or request
+  const baseUrl = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'https://mcp-store-server.vercel.app';
+
+  // Build SSE endpoint URL with parameters
+  const sseUrl = new URL(`${baseUrl}/api/feedback-mcp/notifications`);
+  sseUrl.searchParams.set('client_id', client_id);
+  if (replay_recent) {
+    sseUrl.searchParams.set('last_event_id', 'replay');
+  }
+
+  const instructions = `
+🔔 **PUSH NOTIFICATIONS ACTIVATED**
+
+To receive real-time notifications, connect to the SSE endpoint:
+
+**Endpoint**: ${sseUrl.toString()}
+
+**Connection Example (JavaScript)**:
+\`\`\`javascript
+const eventSource = new EventSource("${sseUrl.toString()}");
+
+eventSource.onmessage = (event) => {
+  const notification = JSON.parse(event.data);
+  console.log('📨 Notification:', notification);
+
+  // Handle based on notification type
+  switch(notification.type) {
+    case 'deployment_ready':
+      // Auto-trigger testing
+      testDeployment(notification.feedbackId);
+      break;
+    case 'test_requested':
+      // Run requested tests
+      runTests(notification.data.test_query);
+      break;
+  }
+};
+
+eventSource.onerror = (error) => {
+  console.error('SSE Error:', error);
+};
+\`\`\`
+
+**Notification Types**:
+- \`feedback_created\`: New feedback submitted
+- \`status_updated\`: Feedback status changed
+- \`deployment_ready\`: Code deployed, ready for testing
+- \`fix_deployed\`: Fix has been deployed
+- \`test_requested\`: Testing is requested
+
+**Features**:
+- Real-time push notifications (no polling!)
+- Auto-reconnect on disconnect
+- Event replay on reconnection
+- Keepalive every 30 seconds
+
+This enables TRUE AUTONOMOUS operation! 🚀
+`;
+
+  return Response.json({
+    jsonrpc: "2.0",
+    id,
+    result: {
+      content: [
+        {
+          type: "text",
+          text: instructions
+        }
+      ]
+    }
+  });
+}
+
 export async function GET(request: NextRequest) {
   try {
     await initDatabase();
@@ -690,7 +832,7 @@ export async function GET(request: NextRequest) {
       status: "🚀 FEEDBACK LOOP ACTIVE",
       statistics: stats.rows[0],
       recent_feedback: recentFeedback.rows,
-      tools: ["submit_feedback", "get_feedback_status", "update_feedback_status"],
+      tools: ["submit_feedback", "get_feedback_status", "update_feedback_status", "subscribe_notifications"],
       database_initialized: dbInitialized
     });
 

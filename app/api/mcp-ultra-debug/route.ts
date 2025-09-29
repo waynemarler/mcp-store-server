@@ -31,15 +31,16 @@ let performanceStats = {
   coldStarts: 0
 };
 
-// Build universal index on startup
+// Build universal index on startup - PROPER CACHING IMPLEMENTATION
 async function buildUniversalIndex() {
   if (universalServerIndex) {
-    console.log('🔥 Universal index already built');
+    const indexAge = Date.now() - universalServerIndex.indexStats.buildTimestamp;
+    console.log(`🔥 Universal index already built - age: ${Math.round(indexAge / 1000)}s`);
     return universalServerIndex;
   }
 
   const buildStartTime = Date.now();
-  console.log('🚀 Building universal server index from database...');
+  console.log('🚀 Building universal server index from database (FIRST TIME)...');
 
   try {
     const { sql } = await import('@vercel/postgres');
@@ -132,10 +133,17 @@ async function buildUniversalIndex() {
   }
 }
 
-// Initialize index on module load
-let indexInitPromise: Promise<any> | null = null;
-if (!indexInitPromise) {
-  indexInitPromise = buildUniversalIndex().catch(console.error);
+// PROPER MODULE-LEVEL CACHING - As Claude Desktop demanded
+// This ensures index is built ONCE per serverless instance lifetime
+async function ensureIndexBuilt() {
+  if (!universalServerIndex) {
+    console.log('🧊 Cold start detected - building index for first time');
+    await buildUniversalIndex();
+  } else {
+    const indexAge = Date.now() - universalServerIndex.indexStats.buildTimestamp;
+    console.log(`🔥 Using cached index - age: ${Math.round(indexAge / 1000)}s`);
+  }
+  return universalServerIndex;
 }
 
 // UNIVERSAL NLP PARSING - Expanded for ALL query types
@@ -352,15 +360,15 @@ function classifyIntentLocal(query: string) {
 
 // Universal server lookup using the indexed database
 async function findServersForIntent(intent: any, query: string): Promise<any[]> {
-  // Ensure index is built
-  await indexInitPromise;
+  // Ensure index is built (proper caching)
+  const index = await ensureIndexBuilt();
 
-  if (!universalServerIndex) {
+  if (!index) {
     console.error('❌ Universal index not available');
     return [];
   }
 
-  const { serversByCapability, serversByCategory } = universalServerIndex;
+  const { serversByCapability, serversByCategory } = index;
   const foundServers = new Set<any>();
 
   // Search by intent keywords
@@ -679,11 +687,15 @@ async function handleUltraFastQuery(args: any): Promise<string> {
 
     // STEP 2: Universal Database Index Lookup (truly 1ms - no HTTP!)
     const routeStartTime = Date.now();
+    const indexWasCached = !!universalServerIndex;
+
     debugLog.steps.push({
       step: 2,
       name: "UNIVERSAL_INDEX_LOOKUP",
       startTime: new Date().toISOString(),
-      description: "Query universal index of ALL 7000+ servers - NO HTTP CALLS"
+      description: indexWasCached ?
+        "Using CACHED universal index - ZERO database calls!" :
+        "Building universal index from database (cold start)"
     });
 
     // Find servers using universal index
@@ -940,8 +952,8 @@ function formatUltraFastError(query: string, error: any, debugLog: any): string 
 }
 
 export async function GET(request: NextRequest) {
-  // Ensure index is available
-  await indexInitPromise;
+  // Ensure index is available (proper caching)
+  await ensureIndexBuilt();
 
   const cacheStats = {
     size: queryCache.size,

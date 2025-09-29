@@ -193,9 +193,8 @@ async function executeQuery(parseResult: any) {
       };
     }
 
-    // Call the actual AI routing endpoint
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ||
-                   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+    // Call the actual AI routing endpoint - use deployed URL directly
+    const baseUrl = 'https://mcp-store-server.vercel.app';
 
     const routingResponse = await fetch(`${baseUrl}/api/ai-execute-v3`, {
       method: 'POST',

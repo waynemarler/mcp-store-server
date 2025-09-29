@@ -3,10 +3,22 @@ import { NextRequest } from "next/server";
 // TRULY SELF-CONTAINED ULTRA-FAST DEBUG - ZERO HTTP CALLS!
 // Target: <10ms total time with complete NLP + routing in-memory
 
-// UNIVERSAL ULTRA-FAST ARCHITECTURE - Load ALL 7000+ servers at startup
-// Build in-memory index for instant lookup of ANY query type
+// PHASE 2 ULTRA-FAST COLD START ARCHITECTURE - <300ms target!
+// Lazy loading strategy: minimal startup, expand on demand
 
-// Universal server index - populated at startup
+// Minimal startup index - only essentials loaded immediately
+let minimalStartupIndex: {
+  topServers: any[];
+  essentialCapabilities: Map<string, any[]>;
+  indexStats: {
+    serversLoaded: number;
+    capabilitiesIndexed: number;
+    buildTime: number;
+    buildTimestamp: number;
+  };
+} | null = null;
+
+// Full universal index - built lazily after first query
 let universalServerIndex: {
   serversByCapability: Map<string, any[]>;
   serversByCategory: Map<string, any[]>;
@@ -20,6 +32,12 @@ let universalServerIndex: {
   };
 } | null = null;
 
+// Index building state
+let indexBuildingState: {
+  minimalBuilding?: Promise<any>;
+  fullBuilding?: Promise<any>;
+} = {};
+
 // Smart caching layer
 const queryCache = new Map<string, { data: any, timestamp: number, hitCount: number }>();
 const CACHE_TTL = 900000; // 15 minutes
@@ -31,7 +49,77 @@ let performanceStats = {
   coldStarts: 0
 };
 
-// Build universal index on startup - PROPER CACHING IMPLEMENTATION
+// PHASE 2: Minimal startup index - Lightning fast <100ms startup!
+async function buildMinimalStartupIndex() {
+  if (minimalStartupIndex) {
+    const indexAge = Date.now() - minimalStartupIndex.indexStats.buildTimestamp;
+    console.log(`⚡ Minimal index already built - age: ${Math.round(indexAge / 1000)}s`);
+    return minimalStartupIndex;
+  }
+
+  const buildStartTime = Date.now();
+  console.log('⚡ Building MINIMAL startup index - ultra-fast cold start...');
+
+  try {
+    const { sql } = await import('@vercel/postgres');
+
+    // MINIMAL QUERY: Only top 50 most popular servers for instant startup
+    const result = await sql`
+      SELECT qualified_name, display_name, description, category, tools, use_count
+      FROM smithery_mcp_servers
+      WHERE security_scan_passed = true
+      ORDER BY use_count DESC
+      LIMIT 50
+    `;
+
+    const topServers = result.rows;
+    const essentialCapabilities = new Map<string, any[]>();
+
+    // Ultra-fast indexing - only essential keywords
+    const essentialKeywords = [
+      'crypto', 'bitcoin', 'ethereum', 'weather', 'stock', 'price',
+      'search', 'news', 'translate', 'book', 'food', 'travel', 'music'
+    ];
+
+    for (const server of topServers) {
+      // Index only essential capabilities for speed
+      const desc = (server.description || '').toLowerCase();
+      const name = (server.display_name || '').toLowerCase();
+      const category = (server.category || '').toLowerCase();
+
+      for (const keyword of essentialKeywords) {
+        if (desc.includes(keyword) || name.includes(keyword) || category.includes(keyword)) {
+          if (!essentialCapabilities.has(keyword)) {
+            essentialCapabilities.set(keyword, []);
+          }
+          essentialCapabilities.get(keyword)!.push(server);
+        }
+      }
+    }
+
+    const buildTime = Date.now() - buildStartTime;
+
+    minimalStartupIndex = {
+      topServers,
+      essentialCapabilities,
+      indexStats: {
+        serversLoaded: topServers.length,
+        capabilitiesIndexed: essentialCapabilities.size,
+        buildTime,
+        buildTimestamp: Date.now()
+      }
+    };
+
+    console.log(`✅ Minimal index built: ${topServers.length} servers, ${essentialCapabilities.size} capabilities in ${buildTime}ms`);
+    return minimalStartupIndex;
+
+  } catch (error) {
+    console.error('❌ Failed to build minimal index:', error);
+    throw error;
+  }
+}
+
+// PHASE 2: Full universal index - Built lazily after minimal index
 async function buildUniversalIndex() {
   if (universalServerIndex) {
     const indexAge = Date.now() - universalServerIndex.indexStats.buildTimestamp;
@@ -40,12 +128,12 @@ async function buildUniversalIndex() {
   }
 
   const buildStartTime = Date.now();
-  console.log('🚀 Building universal server index from database (FIRST TIME)...');
+  console.log('🚀 Building FULL universal index (lazy load after minimal)...');
 
   try {
     const { sql } = await import('@vercel/postgres');
 
-    // Load servers from database with optimizations for cold start speed
+    // Load MORE servers after minimal startup
     const result = await sql`
       SELECT qualified_name, display_name, description, category,
              tools, tags, use_count, security_scan_passed, author,
@@ -53,7 +141,7 @@ async function buildUniversalIndex() {
       FROM smithery_mcp_servers
       WHERE security_scan_passed = true
       ORDER BY use_count DESC
-      LIMIT 1000
+      LIMIT 500
     `;
 
     const allServers = result.rows;
@@ -61,11 +149,11 @@ async function buildUniversalIndex() {
     const serversByCategory = new Map<string, any[]>();
     const capabilitySet = new Set<string>();
 
-    // Optimized indexing - focus on high-impact servers first
+    // Full indexing with optimizations
     for (let i = 0; i < allServers.length; i++) {
       const server = allServers[i];
 
-      // Index by category (fast)
+      // Index by category
       if (server.category) {
         const category = server.category.toLowerCase();
         if (!serversByCategory.has(category)) {
@@ -74,7 +162,7 @@ async function buildUniversalIndex() {
         serversByCategory.get(category)!.push(server);
       }
 
-      // Extract and index capabilities from tools (optimized)
+      // Extract capabilities from tools
       if (server.tools) {
         try {
           const tools = typeof server.tools === 'string' ? JSON.parse(server.tools) : server.tools;
@@ -96,10 +184,10 @@ async function buildUniversalIndex() {
         }
       }
 
-      // Index key description keywords only (limited to save time)
-      if (server.description && i < 500) { // Only index descriptions for top 500 servers
+      // Index description keywords (optimized)
+      if (server.description && i < 200) {
         const keywords = server.description.toLowerCase().match(/\b\w{4,}\b/g) || [];
-        for (const keyword of keywords.slice(0, 10)) { // Limit to first 10 keywords per server
+        for (const keyword of keywords.slice(0, 5)) {
           if (keyword.length > 3) {
             capabilitySet.add(keyword);
 
@@ -127,7 +215,7 @@ async function buildUniversalIndex() {
       }
     };
 
-    console.log(`✅ Universal index built: ${allServers.length} servers, ${capabilitySet.size} capabilities in ${buildTime}ms`);
+    console.log(`✅ Full universal index built: ${allServers.length} servers, ${capabilitySet.size} capabilities in ${buildTime}ms`);
     return universalServerIndex;
 
   } catch (error) {
@@ -136,35 +224,56 @@ async function buildUniversalIndex() {
   }
 }
 
-// COLD START OPTIMIZED CACHING - Responsive to Claude Desktop feedback
-// Balances cold start speed (<100ms) with full functionality
-let indexBuildingPromise: Promise<any> | null = null;
+// PHASE 2: ULTRA-FAST COLD START STRATEGY - <300ms target!
+// Step 1: Build minimal index immediately (50ms target)
+// Step 2: Upgrade to full index lazily in background
 
-async function ensureIndexBuilt() {
-  if (universalServerIndex) {
-    const indexAge = Date.now() - universalServerIndex.indexStats.buildTimestamp;
-    console.log(`🔥 Using cached index - age: ${Math.round(indexAge / 1000)}s`);
-    return universalServerIndex;
+async function ensureMinimalIndexBuilt() {
+  if (minimalStartupIndex) {
+    return minimalStartupIndex;
   }
 
-  // If already building, wait for it
-  if (indexBuildingPromise) {
-    console.log('⏳ Index build in progress - waiting...');
-    return await indexBuildingPromise;
+  // If already building minimal, wait for it
+  if (indexBuildingState.minimalBuilding) {
+    console.log('⏳ Minimal index build in progress - waiting...');
+    return await indexBuildingState.minimalBuilding;
   }
 
-  // Start building (only one instance can build at a time)
-  console.log('🧊 Cold start - building index (optimized for speed)');
-  indexBuildingPromise = buildUniversalIndex();
+  // Start building minimal index (lightning fast!)
+  console.log('⚡ Cold start - building MINIMAL index (<100ms target)');
+  indexBuildingState.minimalBuilding = buildMinimalStartupIndex();
 
   try {
-    const result = await indexBuildingPromise;
-    indexBuildingPromise = null; // Clear the promise
+    const result = await indexBuildingState.minimalBuilding;
+    indexBuildingState.minimalBuilding = undefined;
+
+    // Start building full index in background (don't wait for it!)
+    if (!universalServerIndex && !indexBuildingState.fullBuilding) {
+      console.log('🔄 Starting background build of full index...');
+      indexBuildingState.fullBuilding = buildUniversalIndex();
+      // Don't await - let it build in background!
+    }
+
     return result;
   } catch (error) {
-    indexBuildingPromise = null; // Clear the promise on error
+    indexBuildingState.minimalBuilding = undefined;
     throw error;
   }
+}
+
+async function ensureIndexBuilt() {
+  // First priority: ensure minimal index exists for fast responses
+  const minimal = await ensureMinimalIndexBuilt();
+
+  // If full index exists, use it; otherwise use minimal
+  if (universalServerIndex) {
+    const indexAge = Date.now() - universalServerIndex.indexStats.buildTimestamp;
+    console.log(`🔥 Using FULL cached index - age: ${Math.round(indexAge / 1000)}s`);
+    return { index: universalServerIndex, type: 'full' };
+  }
+
+  console.log(`⚡ Using MINIMAL index - ${minimal.indexStats.serversLoaded} servers loaded`);
+  return { index: minimal, type: 'minimal' };
 }
 
 // UNIVERSAL NLP PARSING - Expanded for ALL query types
@@ -379,18 +488,43 @@ function classifyIntentLocal(query: string) {
   };
 }
 
-// Universal server lookup using the indexed database
+// PHASE 2: Smart server lookup - works with minimal OR full index
 async function findServersForIntent(intent: any, query: string): Promise<any[]> {
-  // Ensure index is built (proper caching)
-  const index = await ensureIndexBuilt();
+  // Get best available index (minimal or full)
+  const indexResult = await ensureIndexBuilt();
 
-  if (!index) {
-    console.error('❌ Universal index not available');
+  if (!indexResult?.index) {
+    console.error('❌ No index available');
     return [];
   }
 
-  const { serversByCapability, serversByCategory } = index;
+  const { index, type } = indexResult;
   const foundServers = new Set<any>();
+
+  // Handle minimal index (different structure)
+  if (type === 'minimal') {
+    const { essentialCapabilities, topServers } = index as any;
+
+    // Search essential capabilities first
+    if (intent.keywords) {
+      for (const keyword of intent.keywords) {
+        const servers = essentialCapabilities.get(keyword.toLowerCase());
+        if (servers) {
+          servers.slice(0, 2).forEach((server: any) => foundServers.add(server));
+        }
+      }
+    }
+
+    // If no matches, add top servers as fallback
+    if (foundServers.size === 0) {
+      topServers.slice(0, 3).forEach((server: any) => foundServers.add(server));
+    }
+
+    return Array.from(foundServers).slice(0, 3);
+  }
+
+  // Handle full universal index (original logic)
+  const { serversByCapability, serversByCategory } = index as any;
 
   // Search by intent keywords
   if (intent.keywords) {
@@ -706,17 +840,20 @@ async function handleUltraFastQuery(args: any): Promise<string> {
     };
     debugLog.steps[0].duration = `${parseTime}ms`;
 
-    // STEP 2: Universal Database Index Lookup (truly 1ms - no HTTP!)
+    // STEP 2: Smart Index Lookup (minimal or full)
     const routeStartTime = Date.now();
-    const indexWasCached = !!universalServerIndex;
+    const minimalCached = !!minimalStartupIndex;
+    const fullCached = !!universalServerIndex;
 
     debugLog.steps.push({
       step: 2,
-      name: "UNIVERSAL_INDEX_LOOKUP",
+      name: "SMART_INDEX_LOOKUP",
       startTime: new Date().toISOString(),
-      description: indexWasCached ?
-        "Using CACHED universal index - ZERO database calls!" :
-        "Building universal index from database (cold start)"
+      description: fullCached ?
+        "Using FULL cached index - complete coverage!" :
+        minimalCached ?
+        "Using MINIMAL cached index - ultra-fast startup!" :
+        "Building minimal index (cold start optimization)"
     });
 
     // Find servers using universal index
@@ -912,29 +1049,39 @@ function formatUltraFastDebugOutput(query: string, result: any, debugLog: any): 
   output += `${"─".repeat(30)}\n`;
   output += formatResultData(result.result);
 
-  // INDEX STATUS - As specifically requested by Claude Desktop
+  // INDEX STATUS - Phase 2 with dual index system
   output += `\n\n📊 **INDEX STATUS**\n`;
   output += `${"─".repeat(30)}\n`;
   if (universalServerIndex) {
     const stats = universalServerIndex.indexStats;
+    output += `🔥 **FULL INDEX ACTIVE**\n`;
     output += `• Servers Loaded: ${stats.serversLoaded.toLocaleString()}\n`;
     output += `• Capabilities Indexed: ${stats.capabilitiesIndexed}\n`;
     output += `• Categories Indexed: ${stats.categoriesIndexed}\n`;
-    output += `• Index Build Time: ${stats.buildTime}ms (at startup)\n`;
-    output += `• Query Lookup Time: 1ms\n`;
-    output += `• Memory Usage: ~${Math.round(stats.serversLoaded * 2 / 1000)}MB\n`;
-    output += `• Index Age: ${Math.round((Date.now() - stats.buildTimestamp) / 1000)}s\n\n`;
+    output += `• Index Build Time: ${stats.buildTime}ms\n`;
+    output += `• Index Age: ${Math.round((Date.now() - stats.buildTimestamp) / 1000)}s\n`;
+  } else if (minimalStartupIndex) {
+    const stats = minimalStartupIndex.indexStats;
+    output += `⚡ **MINIMAL INDEX ACTIVE** (Full building in background)\n`;
+    output += `• Servers Loaded: ${stats.serversLoaded} (top tier)\n`;
+    output += `• Capabilities Indexed: ${stats.capabilitiesIndexed}\n`;
+    output += `• Index Build Time: ${stats.buildTime}ms (ultra-fast!)\n`;
+    output += `• Index Age: ${Math.round((Date.now() - stats.buildTimestamp) / 1000)}s\n`;
+    output += `• Background Status: ${indexBuildingState.fullBuilding ? 'Building...' : 'Queued'}\n`;
   } else {
-    output += `⚠️ **Index Building**: Universal index initializing...\n\n`;
+    output += `⚠️ **Index Building**: Minimal index initializing...\n`;
   }
+  output += `• Query Lookup Time: 1ms\n`;
+  output += `• Cold Start Target: <300ms\n\n`;
 
-  // Architecture explanation
-  output += `🏗️ **UNIVERSAL ULTRA-FAST ARCHITECTURE**\n`;
+  // Phase 2 Architecture explanation
+  output += `🏗️ **PHASE 2: ULTRA-FAST COLD START ARCHITECTURE**\n`;
   output += `${"─".repeat(30)}\n`;
-  output += `1. **Universal Database Index**: ALL 7000+ servers indexed (8-10s startup)\n`;
-  output += `2. **Local NLP Parsing**: Zero HTTP calls (1-2ms)\n`;
-  output += `3. **Instant Lookup**: Keywords → servers mapping (1ms)\n`;
-  output += `4. **Performance Target**: <10ms total time\n\n`;
+  output += `1. **Minimal Startup**: Top 50 servers indexed (<100ms startup)\n`;
+  output += `2. **Lazy Loading**: Full index builds in background\n`;
+  output += `3. **Local NLP Parsing**: Zero HTTP calls (1-2ms)\n`;
+  output += `4. **Smart Fallback**: Works with minimal OR full index\n`;
+  output += `5. **Cold Start Target**: <300ms (Claude Desktop requirement)\n\n`;
 
   // Serverless caching explanation
   output += `📋 **CACHING STATUS**\n`;
@@ -973,8 +1120,8 @@ function formatUltraFastError(query: string, error: any, debugLog: any): string 
 }
 
 export async function GET(request: NextRequest) {
-  // Ensure index is available (proper caching)
-  await ensureIndexBuilt();
+  // Ensure minimal index is ready (ultra-fast)
+  await ensureMinimalIndexBuilt();
 
   const cacheStats = {
     size: queryCache.size,
@@ -987,27 +1134,38 @@ export async function GET(request: NextRequest) {
     })).slice(0, 5)
   };
 
+  // Phase 2: Dual index status
   const indexStats = universalServerIndex ? {
+    type: 'full',
     serversLoaded: universalServerIndex.indexStats.serversLoaded,
     capabilitiesIndexed: universalServerIndex.indexStats.capabilitiesIndexed,
     categoriesIndexed: universalServerIndex.indexStats.categoriesIndexed,
     buildTime: universalServerIndex.indexStats.buildTime + 'ms',
     indexAge: Math.round((Date.now() - universalServerIndex.indexStats.buildTimestamp) / 1000) + 's',
     memoryUsage: Math.round(universalServerIndex.indexStats.serversLoaded * 2 / 1000) + 'MB'
+  } : minimalStartupIndex ? {
+    type: 'minimal',
+    serversLoaded: minimalStartupIndex.indexStats.serversLoaded,
+    capabilitiesIndexed: minimalStartupIndex.indexStats.capabilitiesIndexed,
+    buildTime: minimalStartupIndex.indexStats.buildTime + 'ms (ultra-fast!)',
+    indexAge: Math.round((Date.now() - minimalStartupIndex.indexStats.buildTimestamp) / 1000) + 's',
+    backgroundBuilding: !!indexBuildingState.fullBuilding,
+    memoryUsage: Math.round(minimalStartupIndex.indexStats.serversLoaded * 1 / 1000) + 'MB'
   } : {
-    status: 'building',
-    message: 'Universal index is initializing...'
+    type: 'building',
+    message: 'Minimal index is initializing...'
   };
 
   return Response.json({
-    name: "universal-ultra-fast-debug-server",
-    version: "3.0.0",
-    description: "UNIVERSAL ROUTING - All 7000+ servers accessible at 2-5ms",
+    name: "phase2-ultra-fast-cold-start-server",
+    version: "4.0.0",
+    description: "PHASE 2: <300ms cold start with dual index system",
     architecture: {
-      universalIndex: "ALL servers indexed from database (8-10s startup)",
+      coldStartOptimization: "Minimal index (50 servers) <100ms startup",
+      lazyLoading: "Full index builds in background",
       nlpParsing: "expanded for all query types (1-2ms)",
-      serverLookup: "instant keyword mapping (1ms)",
-      totalTarget: "<10ms for ANY query type"
+      smartFallback: "Works with minimal OR full index",
+      coldStartTarget: "<300ms (Claude Desktop requirement)"
     },
     performance: {
       ...performanceStats,

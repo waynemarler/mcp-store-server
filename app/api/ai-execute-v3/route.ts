@@ -31,27 +31,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // STRATEGY: Run queries with aggressive timeout for speed
-    const queryTimeout = 200; // 200ms max per query
-
+    // STRATEGY: Run 3 queries in PARALLEL without aggressive timeouts
     const [fastResults, smartResults, fallbackResults] = await Promise.allSettled([
       // Query 1: ULTRA-FAST basic matching (like V1)
-      Promise.race([
-        runFastQuery(category, capabilities, query),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Fast query timeout')), queryTimeout))
-      ]),
+      runFastQuery(category, capabilities, query),
 
       // Query 2: SMART semantic matching (parallel)
-      Promise.race([
-        runSmartQuery(intent, query, capabilities, category, requireVerified),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Smart query timeout')), queryTimeout))
-      ]),
+      runSmartQuery(intent, query, capabilities, category, requireVerified),
 
       // Query 3: FALLBACK broad matching
-      Promise.race([
-        runFallbackQuery(query, capabilities),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Fallback query timeout')), queryTimeout))
-      ])
+      runFallbackQuery(query, capabilities)
     ]);
 
     const routingTime = Date.now() - startTime;
@@ -112,24 +101,27 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Query 1: Ultra-fast basic matching (optimized for speed)
+// Query 1: Ultra-fast basic matching (fixed for actual schema)
 async function runFastQuery(category: string, capabilities: string[], query: string) {
-  // Skip if no meaningful search criteria
-  if (!category && capabilities.length === 0 && !query) {
-    return { rows: [] };
-  }
-
   const conditions = [];
   const params = [];
   let paramIndex = 0;
 
-  // Only add the most specific condition for speed
+  // Use ILIKE for partial matching instead of exact match
   if (category) {
-    conditions.push(`category = $${++paramIndex}`); // Use exact match for speed
-    params.push(category);
-  } else if (capabilities.length > 0) {
+    conditions.push(`category ILIKE $${++paramIndex}`);
+    params.push(`%${category}%`);
+  }
+
+  if (capabilities.length > 0) {
     conditions.push(`tools::text ILIKE $${++paramIndex}`);
-    params.push(`%${capabilities[0]}%`); // Just first capability for speed
+    params.push(`%${capabilities[0]}%`);
+  }
+
+  // Add query term matching if provided
+  if (query) {
+    conditions.push(`(display_name ILIKE $${++paramIndex} OR description ILIKE $${++paramIndex})`);
+    params.push(`%${query}%`, `%${query}%`);
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : 'WHERE 1=1';
@@ -139,9 +131,8 @@ async function runFastQuery(category: string, capabilities: string[], query: str
            tools, is_remote, security_scan_passed, use_count, author, 'fast' as source
     FROM smithery_mcp_servers
     ${whereClause}
-    AND security_scan_passed = true
     ORDER BY use_count DESC
-    LIMIT 5  -- Reduced limit for speed
+    LIMIT 10
   `;
 
   return sql.query(queryText, params);
@@ -165,7 +156,6 @@ async function runSmartQuery(intent: string, query: string, capabilities: string
   const whereClause = `
     WHERE (${termConditions.join(' OR ')})
     ${category ? `AND category ILIKE $${allTerms.length + 1}` : ''}
-    ${requireVerified ? 'AND security_scan_passed = true' : ''}
   `;
 
   const params = [
@@ -203,9 +193,7 @@ async function runFallbackQuery(query: string, capabilities: string[]) {
     WHERE tools::text ILIKE $1
     OR tags::text ILIKE $1
     OR description ILIKE $1
-    ORDER BY
-      CASE WHEN security_scan_passed THEN 1 ELSE 0 END DESC,
-      use_count DESC
+    ORDER BY use_count DESC
     LIMIT 20
   `;
 

@@ -405,6 +405,21 @@ function classifyIntentLocal(query: string) {
       ],
       keywords: ['code', 'programming', 'github', 'api', 'python'],
       confidence: 0.85
+    },
+
+    // Educational and learning - MISSING PATTERNS CAUSING GUITAR ISSUE!
+    {
+      name: 'learning_query',
+      patterns: [
+        /how.*?(to|do).*?(learn|play|practice).*?(.+)/i,
+        /(learn|study|practice).*?(guitar|piano|music|instrument)/i,
+        /(tutorial|lesson|course).*?(.+)/i,
+        /(teach|show).*?me.*?(.+)/i,
+        /(beginner|start).*?(guide|tutorial)/i,
+        /(music|guitar|piano|violin).*?(lesson|tutorial|learn)/i
+      ],
+      keywords: ['learn', 'guitar', 'music', 'lesson', 'tutorial', 'practice'],
+      confidence: 0.90
     }
   ];
 
@@ -473,7 +488,8 @@ async function findServersForIntent(intent: any, query: string): Promise<any[]> 
       'stock_price_query': 'finance',
       'weather_query': 'weather',
       'news_query': 'news',
-      'translation': 'language'
+      'translation': 'language',
+      'learning_query': 'education'
     };
 
     const category = categoryMap[intent.name];

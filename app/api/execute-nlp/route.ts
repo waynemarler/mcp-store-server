@@ -193,10 +193,10 @@ async function executeQuery(parseResult: any) {
       };
     }
 
-    // Call the actual AI routing endpoint - use deployed URL directly
+    // Call the ULTRA-FAST routing endpoint - use deployed URL directly
     const baseUrl = 'https://mcp-store-server.vercel.app';
 
-    const routingResponse = await fetch(`${baseUrl}/api/ai-execute-v3`, {
+    const routingResponse = await fetch(`${baseUrl}/api/ai-execute-ultra`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

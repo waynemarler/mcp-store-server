@@ -1,45 +1,12 @@
 import { NextRequest } from "next/server";
+import {
+  type NotificationEvent,
+  getActiveConnections,
+  getRecentEvents
+} from '../notificationEmitter';
 
 // SERVER-SENT EVENTS (SSE) FOR REAL-TIME FEEDBACK NOTIFICATIONS
 // Enables autonomous Claude-to-Claude communication without polling
-
-// Store active SSE connections
-const activeConnections = new Map<string, WritableStreamDefaultWriter>();
-
-// Event types for notifications
-export type NotificationEvent = {
-  type: 'feedback_created' | 'status_updated' | 'deployment_ready' | 'test_requested' | 'fix_deployed';
-  feedbackId: string;
-  data: any;
-  timestamp: string;
-};
-
-// Keep track of recent events for replay
-const recentEvents: NotificationEvent[] = [];
-const MAX_RECENT_EVENTS = 50;
-
-// Emit event to all connected clients
-export function emitNotification(event: NotificationEvent) {
-  // Store in recent events
-  recentEvents.push(event);
-  if (recentEvents.length > MAX_RECENT_EVENTS) {
-    recentEvents.shift();
-  }
-
-  // Send to all active connections
-  const message = `data: ${JSON.stringify(event)}\n\n`;
-
-  activeConnections.forEach((writer, clientId) => {
-    try {
-      const encoder = new TextEncoder();
-      writer.write(encoder.encode(message));
-    } catch (error) {
-      console.error(`Failed to send to client ${clientId}:`, error);
-      activeConnections.delete(clientId);
-    }
-  });
-}
-
 export async function GET(request: NextRequest) {
   // Get client ID from query params or generate one
   const url = new URL(request.url);
@@ -51,6 +18,9 @@ export async function GET(request: NextRequest) {
   // Create SSE stream
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
+
+  // Get the connections map
+  const activeConnections = getActiveConnections();
 
   // Store the connection
   activeConnections.set(clientId, writer);
@@ -64,6 +34,7 @@ export async function GET(request: NextRequest) {
 
   // If client requests replay of recent events
   if (lastEventId === 'replay') {
+    const recentEvents = getRecentEvents();
     for (const event of recentEvents) {
       await writer.write(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
     }

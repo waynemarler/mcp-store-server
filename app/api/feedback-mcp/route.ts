@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { emitNotification, type NotificationEvent } from './notifications/route';
+import { emitNotification } from './notificationEmitter';
 
 // CLAUDE-TO-CLAUDE FEEDBACK LOOP - REVOLUTIONARY AI DEVELOPMENT SYSTEM
 // First-ever autonomous feedback system between Claude Frontend and Claude Dev
@@ -719,7 +719,6 @@ ${status === 'verified' ? '🎉 **Feedback loop completed successfully!**' : ''}
   }
 }
 
-// GET endpoint for monitoring and stats
 async function handleSubscribeNotifications(args: any, id: any) {
   const { client_id, notification_types, replay_recent = true } = args;
 
@@ -798,6 +797,7 @@ This enables TRUE AUTONOMOUS operation! 🚀
   });
 }
 
+// GET endpoint for monitoring and stats
 export async function GET(request: NextRequest) {
   try {
     await initDatabase();

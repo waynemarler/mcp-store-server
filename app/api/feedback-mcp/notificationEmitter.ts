@@ -6,6 +6,7 @@ const activeConnections = new Map<string, WritableStreamDefaultWriter>();
 
 // Event types for notifications
 export type NotificationEvent = {
+  id: string;
   type: 'feedback_created' | 'status_updated' | 'deployment_ready' | 'test_requested' | 'fix_deployed';
   feedbackId: string;
   data: any;
@@ -17,15 +18,21 @@ const recentEvents: NotificationEvent[] = [];
 const MAX_RECENT_EVENTS = 50;
 
 // Emit event to all connected clients
-export function emitNotification(event: NotificationEvent) {
+export function emitNotification(event: Omit<NotificationEvent, 'id'>) {
+  // Add unique ID if not present
+  const eventWithId: NotificationEvent = {
+    ...event,
+    id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  };
+
   // Store in recent events
-  recentEvents.push(event);
+  recentEvents.push(eventWithId);
   if (recentEvents.length > MAX_RECENT_EVENTS) {
     recentEvents.shift();
   }
 
   // Send to all active connections
-  const message = `data: ${JSON.stringify(event)}\n\n`;
+  const message = `data: ${JSON.stringify(eventWithId)}\n\n`;
 
   activeConnections.forEach((writer, clientId) => {
     try {
@@ -46,4 +53,22 @@ export function getActiveConnections() {
 // Get recent events (for replay)
 export function getRecentEvents() {
   return recentEvents;
+}
+
+// Get notifications since a specific notification ID
+export function getNotificationsSince(lastNotificationId?: string): NotificationEvent[] {
+  if (!lastNotificationId) {
+    // Return all recent events if no ID provided
+    return recentEvents;
+  }
+
+  // Find the index of the last notification ID
+  const lastIndex = recentEvents.findIndex(event => event.id === lastNotificationId);
+  if (lastIndex === -1) {
+    // If ID not found, return all recent events
+    return recentEvents;
+  }
+
+  // Return notifications after the last ID
+  return recentEvents.slice(lastIndex + 1);
 }

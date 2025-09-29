@@ -265,6 +265,32 @@ async function handleMCPMessage(message: any) {
                 }
               },
               {
+                name: "poll_notifications",
+                description: "Poll for new notifications since last check. Alternative to SSE for Claude Desktop compatibility.",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    client_id: {
+                      type: "string",
+                      description: "Unique identifier for this Claude instance"
+                    },
+                    last_notification_id: {
+                      type: "string",
+                      description: "ID of last notification received (optional)"
+                    },
+                    notification_types: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        enum: ["feedback_created", "status_updated", "deployment_ready", "test_requested", "fix_deployed"]
+                      },
+                      description: "Types of notifications to receive (default: all)"
+                    }
+                  },
+                  required: ["client_id"]
+                }
+              },
+              {
                 name: "subscribe_notifications",
                 description: "Subscribe to real-time push notifications for autonomous feedback loop. Returns SSE endpoint URL for Claude Desktop to connect.",
                 inputSchema: {
@@ -306,6 +332,9 @@ async function handleMCPMessage(message: any) {
 
           case "update_feedback_status":
             return await handleUpdateFeedbackStatus(args, id);
+
+          case "poll_notifications":
+            return await handlePollNotifications(args, id);
 
           case "subscribe_notifications":
             return await handleSubscribeNotifications(args, id);
@@ -719,6 +748,90 @@ ${status === 'verified' ? '🎉 **Feedback loop completed successfully!**' : ''}
   }
 }
 
+async function handlePollNotifications(args: any, id: any) {
+  const startTime = Date.now();
+
+  try {
+    const { client_id, last_notification_id, notification_types = [] } = args;
+
+    // Import the notification functions
+    const { getNotificationsSince } = await import('./notificationEmitter');
+
+    // Get new notifications since the last ID
+    let notifications = getNotificationsSince(last_notification_id);
+
+    // Filter by notification types if specified
+    if (notification_types.length > 0) {
+      notifications = notifications.filter(notif =>
+        notification_types.includes(notif.type)
+      );
+    }
+
+    const responseTime = Date.now() - startTime;
+
+    console.log(`📊 Poll notifications: ${client_id} - Found ${notifications.length} new notifications`);
+
+    let output = `📨 **NOTIFICATION POLL RESULTS**\n`;
+    output += `${"=".repeat(50)}\n\n`;
+    output += `**Client ID**: ${client_id}\n`;
+    output += `**New Notifications**: ${notifications.length}\n`;
+    output += `**Poll Time**: ${responseTime}ms\n\n`;
+
+    if (notifications.length === 0) {
+      output += `No new notifications since last check.\n`;
+      if (last_notification_id) {
+        output += `Last notification ID: ${last_notification_id}\n`;
+      }
+    } else {
+      output += `**Latest Notifications**:\n\n`;
+
+      for (const notif of notifications.reverse()) { // Show newest first
+        const typeIcon = {
+          'feedback_created': '📝',
+          'status_updated': '🔄',
+          'deployment_ready': '🚀',
+          'test_requested': '🧪',
+          'fix_deployed': '✅'
+        }[notif.type] || '📨';
+
+        output += `${typeIcon} **${notif.type.toUpperCase()}**\n`;
+        output += `   ID: \`${notif.id}\`\n`;
+        output += `   Feedback: ${notif.feedbackId}\n`;
+        output += `   Message: ${notif.data.message || 'No message'}\n`;
+        output += `   Time: ${notif.timestamp}\n\n`;
+      }
+
+      const latestId = notifications[notifications.length - 1].id;
+      output += `**Latest Notification ID**: \`${latestId}\`\n`;
+      output += `Use this ID in your next poll to get only newer notifications.\n`;
+    }
+
+    return Response.json({
+      jsonrpc: "2.0",
+      id,
+      result: {
+        content: [
+          {
+            type: "text",
+            text: output
+          }
+        ]
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Poll notifications error:', error);
+    return Response.json({
+      jsonrpc: "2.0",
+      id,
+      error: {
+        code: -32000,
+        message: `Failed to poll notifications: ${error.message}`
+      }
+    });
+  }
+}
+
 async function handleSubscribeNotifications(args: any, id: any) {
   const { client_id, notification_types, replay_recent = true } = args;
 
@@ -832,7 +945,7 @@ export async function GET(request: NextRequest) {
       status: "🚀 FEEDBACK LOOP ACTIVE",
       statistics: stats.rows[0],
       recent_feedback: recentFeedback.rows,
-      tools: ["submit_feedback", "get_feedback_status", "update_feedback_status", "subscribe_notifications"],
+      tools: ["submit_feedback", "get_feedback_status", "update_feedback_status", "poll_notifications", "subscribe_notifications"],
       database_initialized: dbInitialized
     });
 

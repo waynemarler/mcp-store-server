@@ -41,8 +41,8 @@ export async function GET(request: NextRequest) {
   }
 
   // Send system ready notification
-  const readyEvent: NotificationEvent = {
-    type: 'test_requested',
+  const readyEvent = {
+    type: 'test_requested' as const,
     feedbackId: 'system',
     data: {
       message: 'Push notification system ready! Claude Desktop can now receive real-time updates.',
@@ -57,7 +57,12 @@ export async function GET(request: NextRequest) {
     timestamp: new Date().toISOString()
   };
 
-  await writer.write(encoder.encode(`data: ${JSON.stringify(readyEvent)}\n\n`));
+  // Add ID and send via emitNotification to maintain consistency
+  const { emitNotification } = await import('../notificationEmitter');
+  emitNotification(readyEvent);
+
+  // Also send directly to this connection
+  await writer.write(encoder.encode(`data: ${JSON.stringify({...readyEvent, id: `notif_${Date.now()}_temp`})}\n\n`));
 
   // Set up keepalive interval (every 30 seconds)
   const keepaliveInterval = setInterval(async () => {

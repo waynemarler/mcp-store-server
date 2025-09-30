@@ -368,6 +368,28 @@ async function handleMCPMessage(message: any) {
                     }
                   }
                 }
+              },
+              {
+                name: "auto_check_notifications",
+                description: "PROACTIVE: Automatically check for new notifications and announce them. Use this every 5 minutes during active conversations for full autonomy!",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    client_id: {
+                      type: "string",
+                      description: "Unique identifier for this Claude instance"
+                    },
+                    announce_immediately: {
+                      type: "boolean",
+                      description: "Whether to immediately announce any found notifications (default: true)"
+                    },
+                    last_check_time: {
+                      type: "string",
+                      description: "ISO timestamp of last check to avoid duplicates (optional)"
+                    }
+                  },
+                  required: ["client_id"]
+                }
               }
             ]
           }
@@ -400,6 +422,9 @@ async function handleMCPMessage(message: any) {
 
           case "get_polling_status":
             return await handleGetPollingStatus(args, id);
+
+          case "auto_check_notifications":
+            return await handleAutoCheckNotifications(args, id);
 
           default:
             return Response.json({
@@ -1309,6 +1334,122 @@ Use \`start_auto_polling\` to begin autonomous operation.`
       error: {
         code: -32000,
         message: `Failed to get polling status: ${error.message}`
+      }
+    });
+  }
+}
+
+async function handleAutoCheckNotifications(args: any, id: any) {
+  const {
+    client_id,
+    announce_immediately = true,
+    last_check_time
+  } = args;
+
+  try {
+    console.log(`🤖 PROACTIVE AUTO-CHECK: ${client_id} checking for new notifications`);
+
+    // Get notifications using the same logic as poll_notifications but with proactive messaging
+    const { getNotificationsSince } = await import('./notificationEmitter');
+
+    // Get all recent notifications from memory (semi-autonomous mode)
+    let notifications = getNotificationsSince();
+
+    // Filter by time if last_check_time provided
+    if (last_check_time) {
+      const lastCheckDate = new Date(last_check_time);
+      notifications = notifications.filter(notif => {
+        const notifTime = new Date(notif.timestamp);
+        return notifTime > lastCheckDate;
+      });
+    }
+
+    const currentTime = new Date().toISOString();
+
+    if (notifications.length === 0) {
+      return Response.json({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          content: [
+            {
+              type: "text",
+              text: `🤖 **PROACTIVE AUTO-CHECK COMPLETE**
+
+**Client**: ${client_id}
+**Check Time**: ${currentTime}
+**New Notifications**: 0
+**Status**: No new notifications found
+
+✅ Proactive monitoring active - will check again automatically in 5 minutes.`
+            }
+          ]
+        }
+      });
+    }
+
+    // Found notifications - announce them proactively!
+    let announcement = `🚨 **AUTONOMOUS NOTIFICATION ALERT!** 🚨
+
+**Client**: ${client_id}
+**Check Time**: ${currentTime}
+**New Notifications Found**: ${notifications.length}
+
+📨 **INCOMING NOTIFICATIONS:**
+
+`;
+
+    // Add each notification with formatted details
+    notifications.slice(0, 5).forEach((notif, index) => {
+      const typeIcon = {
+        'feedback_created': '📝',
+        'status_updated': '🔄',
+        'deployment_ready': '🚀',
+        'test_requested': '🧪',
+        'fix_deployed': '✅'
+      }[notif.type] || '📨';
+
+      announcement += `${typeIcon} **${notif.type.toUpperCase()}**
+   Time: ${notif.timestamp}
+   Feedback: ${notif.feedbackId}
+   Message: ${notif.data.message || 'No message'}
+
+`;
+    });
+
+    if (notifications.length > 5) {
+      announcement += `... and ${notifications.length - 5} more notifications
+
+`;
+    }
+
+    announcement += `🎯 **AUTONOMOUS ACTION REQUIRED:**
+These notifications were automatically detected by the semi-autonomous system and require your attention!
+
+💡 **Next Check**: System will automatically check again in 5 minutes
+⚡ **Full Autonomy**: Proactive notification delivery working perfectly!`;
+
+    return Response.json({
+      jsonrpc: "2.0",
+      id,
+      result: {
+        content: [
+          {
+            type: "text",
+            text: announcement
+          }
+        ]
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Auto-check notifications error:', error);
+    return Response.json({
+      jsonrpc: "2.0",
+      id,
+      error: {
+        code: -32000,
+        message: `Failed to auto-check notifications: ${error.message}`
       }
     });
   }

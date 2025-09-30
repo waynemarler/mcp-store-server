@@ -831,6 +831,7 @@ async function handleUpdateFeedbackStatus(args: any, id: any) {
       emitNotification({
         type: notificationType,
         feedbackId: feedback_id,
+        sender: 'claude_dev', // Status updates come from claude_dev
         data: {
           status: updatedItem.status,
           fix_description,

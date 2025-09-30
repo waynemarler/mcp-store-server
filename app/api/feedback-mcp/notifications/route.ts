@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
   const readyEvent = {
     type: 'test_requested' as const,
     feedbackId: 'system',
+    sender: 'system', // System-generated notification
     data: {
       message: 'Push notification system ready! Claude Desktop can now receive real-time updates.',
       capabilities: [

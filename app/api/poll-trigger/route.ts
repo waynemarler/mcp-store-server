@@ -32,16 +32,19 @@ export async function GET(request: NextRequest) {
         console.log(`  📨 ${notif.type}: ${notif.data.message || JSON.stringify(notif.data)}`);
       });
 
-      // Store notifications in database for Claude Desktop to retrieve
-      await storeNotificationsForPolling(newNotifications);
+      // MEMORY-ONLY SOLUTION: Skip database storage for now
+      // Notifications stay in memory for ~15-30min until serverless restart
+      console.log(`💾 SEMI-AUTONOMOUS MODE: Keeping ${newNotifications.length} notifications in memory`);
+      console.log(`⏱️ Notifications will persist until serverless restart (~15-30 minutes)`);
 
       return NextResponse.json({
         success: true,
-        message: `Autonomous polling found ${newNotifications.length} new notifications`,
+        message: `Semi-autonomous polling found ${newNotifications.length} new notifications (memory-only)`,
         notifications: newNotifications.length,
         executionTime: responseTime,
         timestamp: new Date().toISOString(),
-        status: 'notifications_found'
+        status: 'notifications_found',
+        mode: 'semi_autonomous_memory_only'
       });
     } else {
       console.log('🤖 Cron: No new notifications found');

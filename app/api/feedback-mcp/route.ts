@@ -834,49 +834,11 @@ async function handlePollNotifications(args: any, id: any) {
     // Get in-memory notifications since the last ID
     let memoryNotifications = getNotificationsSince(last_notification_id);
 
-    // Get database-stored notifications from autonomous polling
-    // PRAGMATIC SOLUTION: Query feedback_items table for notification entries
+    // MEMORY-ONLY SOLUTION: Skip database complexity for semi-autonomous mode
+    // Database persistence will be added later as a separate project
     let dbNotifications: any[] = [];
-    try {
-      const { sql } = await import('@vercel/postgres');
-
-      console.log(`🔍 PRAGMATIC APPROACH: Checking feedback_items for notifications for client: ${client_id}`);
-
-      // Count notification entries in feedback_items table
-      const countResult = await sql`
-        SELECT COUNT(*) as total
-        FROM feedback_items
-        WHERE feedback_type = 'notification'
-      `;
-      console.log(`📊 Total notification entries in feedback_items: ${countResult.rows[0].total}`);
-
-      // CLAUDE DESKTOP'S FIX: Simplified query first to test basic retrieval
-      const dbResult = await sql`
-        SELECT id, created_at, additional_metrics
-        FROM feedback_items
-        WHERE feedback_type = 'notification'
-        ORDER BY created_at DESC
-        LIMIT 50
-      `;
-
-      console.log(`🔍 Found ${dbResult.rows.length} unread notification entries for ${client_id}`);
-
-      if (dbResult.rows.length > 0) {
-        // Convert feedback entries back to notification format
-        dbNotifications = dbResult.rows.map(row => {
-          const metrics = JSON.parse(row.additional_metrics);
-          return metrics.original_data;
-        });
-
-        // SIMPLIFIED: Skip client tracking for now to test basic retrieval
-        // TODO: Re-add client tracking once basic retrieval works
-        console.log(`📥 PRAGMATIC SUCCESS: Retrieved ${dbNotifications.length} database notifications for ${client_id}`);
-      }
-    } catch (dbError) {
-      console.error('❌ Error fetching database notifications via pragmatic approach:', dbError);
-      console.error('❌ Database error details:', dbError.message);
-      // Continue with in-memory notifications only
-    }
+    console.log(`💾 SEMI-AUTONOMOUS MODE: Using memory-only storage for ${client_id}`);
+    console.log(`⏱️ Notifications persist ~15-30 minutes until serverless restart`);
 
     // Combine and deduplicate notifications (database notifications take precedence)
     const allNotifications = [...dbNotifications, ...memoryNotifications];

@@ -71,54 +71,47 @@ export async function GET(request: NextRequest) {
 }
 
 // Store notifications in database for later retrieval by polling clients
+// PRAGMATIC SOLUTION: Use existing feedback_items table instead of new polling_notifications table
 async function storeNotificationsForPolling(notifications: any[]) {
   try {
-    // Initialize database
+    // Initialize database - using proven feedback_items table
     const { sql } = await import('@vercel/postgres');
 
-    console.log(`📤 Attempting to store ${notifications.length} notifications in database`);
+    console.log(`📤 PRAGMATIC APPROACH: Storing ${notifications.length} notifications in feedback_items table`);
 
-    // Create polling_notifications table if it doesn't exist
-    try {
-      await sql`
-        CREATE TABLE IF NOT EXISTS polling_notifications (
-          id SERIAL PRIMARY KEY,
-          notification_id VARCHAR(255) UNIQUE NOT NULL,
-          notification_type VARCHAR(100) NOT NULL,
-          feedback_id VARCHAR(255),
-          notification_data JSONB NOT NULL,
-          timestamp TIMESTAMPTZ NOT NULL,
-          retrieved_by_clients TEXT[] DEFAULT ARRAY[]::TEXT[],
-          created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-      `;
-      console.log(`✅ Database table 'polling_notifications' ready`);
-    } catch (tableError) {
-      console.error(`❌ Failed to create table:`, tableError);
-      throw tableError;
-    }
-
-    // Insert new notifications
+    // Insert notifications as special feedback entries
     let successCount = 0;
     for (const notif of notifications) {
       try {
+        // Store notification as a special feedback entry
         const result = await sql`
-          INSERT INTO polling_notifications (
-            notification_id, notification_type, feedback_id,
-            notification_data, timestamp
+          INSERT INTO feedback_items (
+            feedback_type, component, severity, current_behavior, expected_behavior,
+            suggested_fix, test_query, current_performance_ms, target_performance_ms,
+            confidence_score, additional_metrics, priority_score, related_feedback_id
           ) VALUES (
-            ${notif.id}, ${notif.type}, ${notif.feedbackId},
-            ${JSON.stringify(notif)}, ${notif.timestamp}
+            'notification', ${notif.type}, 'info',
+            ${'Autonomous notification: ' + (notif.data.message || JSON.stringify(notif.data))},
+            ${'Auto-retrieved by polling clients'},
+            ${'No action needed - this is an autonomous notification'},
+            ${notif.feedbackId || 'autonomous_polling'},
+            NULL, NULL, 100,
+            ${JSON.stringify({
+              notification_id: notif.id,
+              notification_type: notif.type,
+              feedback_id: notif.feedbackId,
+              original_data: notif,
+              autonomous_polling: true,
+              retrieved_by_clients: []
+            })},
+            10, NULL
           )
-          ON CONFLICT (notification_id) DO NOTHING
-          RETURNING id
+          RETURNING id, created_at
         `;
 
         if (result.rows.length > 0) {
           successCount++;
-          console.log(`✅ Stored notification ${notif.id} with DB ID: ${result.rows[0].id}`);
-        } else {
-          console.log(`ℹ️ Notification ${notif.id} already exists (skipped)`);
+          console.log(`✅ Stored notification ${notif.id} as feedback entry ${result.rows[0].id}`);
         }
       } catch (insertError) {
         console.error(`❌ Failed to insert notification ${notif.id}:`, insertError);
@@ -126,14 +119,18 @@ async function storeNotificationsForPolling(notifications: any[]) {
       }
     }
 
-    console.log(`📥 Successfully stored ${successCount}/${notifications.length} notifications in polling database`);
+    console.log(`📥 PRAGMATIC SUCCESS: Stored ${successCount}/${notifications.length} notifications in feedback_items table`);
 
-    // Verify storage by counting
-    const countResult = await sql`SELECT COUNT(*) as total FROM polling_notifications`;
-    console.log(`📊 Total notifications now in database: ${countResult.rows[0].total}`);
+    // Verify storage by counting notification entries
+    const countResult = await sql`
+      SELECT COUNT(*) as total
+      FROM feedback_items
+      WHERE feedback_type = 'notification'
+    `;
+    console.log(`📊 Total notification entries in feedback_items: ${countResult.rows[0].total}`);
 
   } catch (error) {
-    console.error('❌ Failed to store notifications for polling:', error);
+    console.error('❌ Failed to store notifications using pragmatic approach:', error);
     console.error('❌ Error details:', error.message);
     throw error;
   }

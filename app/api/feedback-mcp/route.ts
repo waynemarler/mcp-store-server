@@ -835,45 +835,71 @@ async function handlePollNotifications(args: any, id: any) {
     let memoryNotifications = getNotificationsSince(last_notification_id);
 
     // Get database-stored notifications from autonomous polling
+    // PRAGMATIC SOLUTION: Query feedback_items table for notification entries
     let dbNotifications: any[] = [];
     try {
       const { sql } = await import('@vercel/postgres');
 
-      console.log(`🔍 Checking database for notifications for client: ${client_id}`);
+      console.log(`🔍 PRAGMATIC APPROACH: Checking feedback_items for notifications for client: ${client_id}`);
 
-      // First check if table exists and get count
+      // Count notification entries in feedback_items table
       const countResult = await sql`
-        SELECT COUNT(*) as total FROM polling_notifications
+        SELECT COUNT(*) as total
+        FROM feedback_items
+        WHERE feedback_type = 'notification'
       `;
-      console.log(`📊 Total notifications in database: ${countResult.rows[0].total}`);
+      console.log(`📊 Total notification entries in feedback_items: ${countResult.rows[0].total}`);
 
-      // Simplified query - get all notifications not retrieved by this client
+      // Query feedback_items for notification entries not retrieved by this client
       const dbResult = await sql`
-        SELECT notification_id, notification_type, feedback_id, notification_data, timestamp, retrieved_by_clients
-        FROM polling_notifications
-        WHERE (retrieved_by_clients IS NULL OR NOT (${client_id} = ANY(retrieved_by_clients)))
-        ORDER BY timestamp DESC
+        SELECT id, created_at, additional_metrics
+        FROM feedback_items
+        WHERE feedback_type = 'notification'
+          AND (
+            additional_metrics->>'retrieved_by_clients' IS NULL
+            OR NOT (${client_id} = ANY(string_to_array(additional_metrics->>'retrieved_by_clients', ',')))
+          )
+        ORDER BY created_at DESC
         LIMIT 50
       `;
 
-      console.log(`🔍 Found ${dbResult.rows.length} unread notifications for ${client_id}`);
+      console.log(`🔍 Found ${dbResult.rows.length} unread notification entries for ${client_id}`);
 
       if (dbResult.rows.length > 0) {
-        dbNotifications = dbResult.rows.map(row => JSON.parse(row.notification_data));
+        // Convert feedback entries back to notification format
+        dbNotifications = dbResult.rows.map(row => {
+          const metrics = JSON.parse(row.additional_metrics);
+          return metrics.original_data;
+        });
 
         // Mark these notifications as retrieved by this client
-        const notificationIds = dbResult.rows.map(row => row.notification_id);
-        for (const notifId of notificationIds) {
-          await sql`
-            UPDATE polling_notifications
-            SET retrieved_by_clients = COALESCE(retrieved_by_clients, ARRAY[]::TEXT[]) || ARRAY[${client_id}]
-            WHERE notification_id = ${notifId}
+        const feedbackIds = dbResult.rows.map(row => row.id);
+        for (const fbId of feedbackIds) {
+          // Get current retrieved_by_clients list
+          const currentResult = await sql`
+            SELECT additional_metrics FROM feedback_items WHERE id = ${fbId}
           `;
+
+          if (currentResult.rows.length > 0) {
+            const metrics = JSON.parse(currentResult.rows[0].additional_metrics);
+            const retrievedClients = metrics.retrieved_by_clients || [];
+
+            if (!retrievedClients.includes(client_id)) {
+              retrievedClients.push(client_id);
+              metrics.retrieved_by_clients = retrievedClients;
+
+              await sql`
+                UPDATE feedback_items
+                SET additional_metrics = ${JSON.stringify(metrics)}
+                WHERE id = ${fbId}
+              `;
+            }
+          }
         }
-        console.log(`📥 Retrieved ${dbNotifications.length} database notifications for ${client_id}`);
+        console.log(`📥 PRAGMATIC SUCCESS: Retrieved ${dbNotifications.length} database notifications for ${client_id}`);
       }
     } catch (dbError) {
-      console.error('❌ Error fetching database notifications:', dbError);
+      console.error('❌ Error fetching database notifications via pragmatic approach:', dbError);
       console.error('❌ Database error details:', dbError.message);
       // Continue with in-memory notifications only
     }

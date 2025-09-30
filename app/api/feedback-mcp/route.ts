@@ -64,6 +64,25 @@ async function initDatabase() {
     await sql`CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback_items(created_at DESC)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_feedback_priority ON feedback_items(priority_score DESC)`;
 
+    // Add sender column to existing tables (migration)
+    try {
+      // Check if column exists first
+      const columnCheck = await sql`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'feedback_items' AND column_name = 'sender'
+      `;
+
+      if (columnCheck.rows.length === 0) {
+        await sql`ALTER TABLE feedback_items ADD COLUMN sender VARCHAR(50) NOT NULL DEFAULT 'claude_desktop'`;
+        console.log('✅ Added sender column to feedback_items table');
+      } else {
+        console.log('ℹ️ Sender column already exists');
+      }
+    } catch (error) {
+      console.log('ℹ️ Sender column migration not needed or already completed');
+    }
+
     console.log('✅ Feedback database initialized successfully');
     dbInitialized = true;
   } catch (error) {

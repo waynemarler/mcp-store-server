@@ -824,13 +824,55 @@ async function handlePollNotifications(args: any, id: any) {
   try {
     const { client_id, last_notification_id, notification_types = [] } = args;
 
+    // Get notifications from both sources:
+    // 1. In-memory notifications (for immediate/real-time)
+    // 2. Database-stored notifications (from Vercel Cron autonomous polling)
+
     // Import the notification functions
     const { getNotificationsSince } = await import('./notificationEmitter');
 
-    // Get new notifications since the last ID
-    let notifications = getNotificationsSince(last_notification_id);
+    // Get in-memory notifications since the last ID
+    let memoryNotifications = getNotificationsSince(last_notification_id);
+
+    // Get database-stored notifications from autonomous polling
+    let dbNotifications: any[] = [];
+    try {
+      const { sql } = await import('@vercel/postgres');
+
+      let dbQuery = sql`
+        SELECT notification_id, notification_type, feedback_id, notification_data, timestamp
+        FROM polling_notifications
+        WHERE NOT (${client_id} = ANY(retrieved_by_clients))
+        ORDER BY timestamp DESC
+        LIMIT 50
+      `;
+
+      const dbResult = await dbQuery;
+      dbNotifications = dbResult.rows.map(row => JSON.parse(row.notification_data));
+
+      // Mark these notifications as retrieved by this client
+      if (dbNotifications.length > 0) {
+        const notificationIds = dbResult.rows.map(row => row.notification_id);
+        await sql`
+          UPDATE polling_notifications
+          SET retrieved_by_clients = array_append(retrieved_by_clients, ${client_id})
+          WHERE notification_id = ANY(${notificationIds})
+        `;
+        console.log(`📥 Retrieved ${dbNotifications.length} database notifications for ${client_id}`);
+      }
+    } catch (dbError) {
+      console.error('Error fetching database notifications:', dbError);
+      // Continue with in-memory notifications only
+    }
+
+    // Combine and deduplicate notifications (database notifications take precedence)
+    const allNotifications = [...dbNotifications, ...memoryNotifications];
+    const uniqueNotifications = allNotifications.filter((notif, index, arr) =>
+      arr.findIndex(n => n.id === notif.id) === index
+    );
 
     // Filter by notification types if specified
+    let notifications = uniqueNotifications;
     if (notification_types.length > 0) {
       notifications = notifications.filter(notif =>
         notification_types.includes(notif.type)
@@ -845,6 +887,7 @@ async function handlePollNotifications(args: any, id: any) {
     output += `${"=".repeat(50)}\n\n`;
     output += `**Client ID**: ${client_id}\n`;
     output += `**New Notifications**: ${notifications.length}\n`;
+    output += `**Sources**: Database: ${dbNotifications.length}, Memory: ${memoryNotifications.length}\n`;
     output += `**Poll Time**: ${responseTime}ms\n\n`;
 
     if (notifications.length === 0) {
@@ -980,15 +1023,8 @@ This enables TRUE AUTONOMOUS operation! 🚀
   });
 }
 
-// Polling manager to track active polling sessions
-const activePollingInstances = new Map<string, {
-  intervalId: NodeJS.Timeout;
-  startedAt: Date;
-  intervalMinutes: number;
-  notificationTypes: string[];
-  lastPollAt: Date;
-  totalPolls: number;
-}>();
+// Database-backed polling system for serverless compatibility
+// Uses Vercel Cron + Database instead of setInterval
 
 async function handleStartAutoPolling(args: any, id: any) {
   const {
@@ -997,68 +1033,42 @@ async function handleStartAutoPolling(args: any, id: any) {
     notification_types = ['feedback_created', 'status_updated', 'deployment_ready', 'test_requested', 'fix_deployed']
   } = args;
 
-  // Validate interval (1-60 minutes)
-  const intervalMins = Math.max(1, Math.min(60, interval_minutes));
+  // Validate interval (fixed at 5 minutes for Vercel Cron)
+  const intervalMins = 5; // Fixed due to Vercel Cron configuration
 
   try {
-    // Stop existing polling if any
-    if (activePollingInstances.has(client_id)) {
-      const existing = activePollingInstances.get(client_id)!;
-      clearInterval(existing.intervalId);
-      activePollingInstances.delete(client_id);
-    }
+    const { sql } = await import('@vercel/postgres');
 
-    // Start new polling
-    const startTime = new Date();
-    let pollCount = 0;
+    // Create polling_clients table if it doesn't exist
+    await sql`
+      CREATE TABLE IF NOT EXISTS polling_clients (
+        id SERIAL PRIMARY KEY,
+        client_id VARCHAR(255) UNIQUE NOT NULL,
+        notification_types TEXT[] NOT NULL,
+        started_at TIMESTAMPTZ NOT NULL,
+        last_poll_at TIMESTAMPTZ NOT NULL,
+        total_polls INTEGER DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `;
 
-    const intervalId = setInterval(async () => {
-      try {
-        pollCount++;
-        console.log(`🤖 Auto-polling for ${client_id} (poll #${pollCount})`);
+    // Register or update the polling client
+    await sql`
+      INSERT INTO polling_clients (
+        client_id, notification_types, started_at, last_poll_at
+      ) VALUES (
+        ${client_id}, ${notification_types}, NOW(), NOW()
+      )
+      ON CONFLICT (client_id)
+      DO UPDATE SET
+        notification_types = ${notification_types},
+        started_at = NOW(),
+        last_poll_at = NOW(),
+        status = 'active'
+    `;
 
-        // Get the notification emitter
-        const { getNotificationsSince } = await import('./notificationEmitter');
-
-        // Get notifications since last poll
-        const instance = activePollingInstances.get(client_id);
-        if (!instance) return; // Instance was removed
-
-        const lastPollTime = instance.lastPollAt;
-        const recentNotifications = getNotificationsSince();
-
-        // Filter notifications newer than last poll
-        const newNotifications = recentNotifications.filter(notif => {
-          const notifTime = new Date(notif.timestamp);
-          return notifTime > lastPollTime && notification_types.includes(notif.type);
-        });
-
-        // Update last poll time
-        instance.lastPollAt = new Date();
-        instance.totalPolls = pollCount;
-
-        if (newNotifications.length > 0) {
-          console.log(`🔔 Found ${newNotifications.length} new notifications for ${client_id}`);
-          // In a real implementation, you'd trigger Claude Desktop here
-          // For now, just log the notifications
-          newNotifications.forEach(notif => {
-            console.log(`  📨 ${notif.type}: ${notif.data.message || JSON.stringify(notif.data)}`);
-          });
-        }
-      } catch (error) {
-        console.error(`Error in auto-polling for ${client_id}:`, error);
-      }
-    }, intervalMins * 60 * 1000);
-
-    // Store polling instance
-    activePollingInstances.set(client_id, {
-      intervalId,
-      startedAt: startTime,
-      intervalMinutes: intervalMins,
-      notificationTypes: notification_types,
-      lastPollAt: startTime,
-      totalPolls: 0
-    });
+    console.log(`🤖 Registered autonomous polling for ${client_id}`);
 
     return Response.json({
       jsonrpc: "2.0",
@@ -1070,17 +1080,27 @@ async function handleStartAutoPolling(args: any, id: any) {
             text: `🤖 **AUTONOMOUS POLLING ACTIVATED!** 🚀
 
 **Client ID**: ${client_id}
-**Polling Interval**: ${intervalMins} minutes
+**Polling Method**: Vercel Cron (Serverless Compatible!)
+**Polling Interval**: 5 minutes (fixed)
 **Monitoring Types**: ${notification_types.join(', ')}
-**Started**: ${startTime.toISOString()}
+**Started**: ${new Date().toISOString()}
 
-📡 **TRUE AUTONOMY ACHIEVED!**
-- Claude Desktop will now poll automatically every ${intervalMins} minutes
-- No human intervention required
-- Monitoring ${notification_types.length} notification types
-- Instance will persist until stopped or serverless restart
+📡 **TRUE SERVERLESS AUTONOMY ACHIEVED!**
+- Vercel Cron calls /api/poll-trigger every 5 minutes
+- New notifications stored in database
+- Retrieved via standard polling calls
+- Survives serverless function restarts
+- Zero maintenance required
 
-⚡ **This enables the world's first autonomous AI-to-AI development loop!**`
+⚡ **World's first serverless autonomous AI-to-AI development loop!**
+
+🔧 **How it works:**
+1. Vercel Cron triggers every 5 minutes
+2. System checks for new notifications
+3. Stores them in polling database
+4. You retrieve them via normal polling calls
+
+🎯 **Next**: Use poll_notifications to retrieve queued notifications!`
           }
         ]
       }
@@ -1103,9 +1123,15 @@ async function handleStopAutoPolling(args: any, id: any) {
   const { client_id } = args;
 
   try {
-    const instance = activePollingInstances.get(client_id);
+    const { sql } = await import('@vercel/postgres');
 
-    if (!instance) {
+    // Get the polling client from database
+    const result = await sql`
+      SELECT * FROM polling_clients
+      WHERE client_id = ${client_id} AND status = 'active'
+    `;
+
+    if (result.rows.length === 0) {
       return Response.json({
         jsonrpc: "2.0",
         id,
@@ -1125,13 +1151,16 @@ Use \`get_polling_status\` to see all active polling instances.`
       });
     }
 
-    // Stop the polling
-    clearInterval(instance.intervalId);
-    const duration = Date.now() - instance.startedAt.getTime();
+    const instance = result.rows[0];
+    const duration = Date.now() - new Date(instance.started_at).getTime();
     const durationMins = Math.round(duration / 60000);
 
-    // Remove from active instances
-    activePollingInstances.delete(client_id);
+    // Deactivate the polling client
+    await sql`
+      UPDATE polling_clients
+      SET status = 'stopped', last_poll_at = NOW()
+      WHERE client_id = ${client_id}
+    `;
 
     return Response.json({
       jsonrpc: "2.0",
@@ -1144,8 +1173,8 @@ Use \`get_polling_status\` to see all active polling instances.`
 
 **Client ID**: ${client_id}
 **Duration**: ${durationMins} minutes
-**Total Polls**: ${instance.totalPolls}
-**Interval**: ${instance.intervalMinutes} minutes
+**Total Polls**: ${instance.total_polls}
+**Method**: Vercel Cron (Database-backed)
 **Stopped**: ${new Date().toISOString()}
 
 🔕 Autonomous polling has been deactivated. Use \`start_auto_polling\` to restart.`
@@ -1171,11 +1200,18 @@ async function handleGetPollingStatus(args: any, id: any) {
   const { client_id } = args;
 
   try {
+    const { sql } = await import('@vercel/postgres');
+
     if (client_id) {
       // Get status for specific client
-      const instance = activePollingInstances.get(client_id);
+      const result = await sql`
+        SELECT * FROM polling_clients
+        WHERE client_id = ${client_id}
+        ORDER BY created_at DESC
+        LIMIT 1
+      `;
 
-      if (!instance) {
+      if (result.rows.length === 0 || result.rows[0].status !== 'active') {
         return Response.json({
           jsonrpc: "2.0",
           id,
@@ -1186,7 +1222,7 @@ async function handleGetPollingStatus(args: any, id: any) {
                 text: `📊 **POLLING STATUS FOR ${client_id}**
 
 **Status**: ❌ NOT POLLING
-**Last Active**: Never
+**Last Active**: ${result.rows.length > 0 ? new Date(result.rows[0].last_poll_at).toISOString() : 'Never'}
 
 Use \`start_auto_polling\` to begin autonomous polling.`
               }
@@ -1195,9 +1231,10 @@ Use \`start_auto_polling\` to begin autonomous polling.`
         });
       }
 
-      const duration = Date.now() - instance.startedAt.getTime();
+      const instance = result.rows[0];
+      const duration = Date.now() - new Date(instance.started_at).getTime();
       const durationMins = Math.round(duration / 60000);
-      const timeSinceLastPoll = Date.now() - instance.lastPollAt.getTime();
+      const timeSinceLastPoll = Date.now() - new Date(instance.last_poll_at).getTime();
       const minsSinceLastPoll = Math.round(timeSinceLastPoll / 60000);
 
       return Response.json({
@@ -1210,23 +1247,28 @@ Use \`start_auto_polling\` to begin autonomous polling.`
               text: `📊 **POLLING STATUS FOR ${client_id}**
 
 **Status**: ✅ ACTIVELY POLLING
-**Started**: ${instance.startedAt.toISOString()}
+**Method**: Vercel Cron (Database-backed)
+**Started**: ${new Date(instance.started_at).toISOString()}
 **Duration**: ${durationMins} minutes
-**Interval**: ${instance.intervalMinutes} minutes
-**Total Polls**: ${instance.totalPolls}
+**Interval**: 5 minutes (Vercel Cron)
+**Total Polls**: ${instance.total_polls}
 **Last Poll**: ${minsSinceLastPoll} minutes ago
-**Monitoring**: ${instance.notificationTypes.join(', ')}
+**Monitoring**: ${instance.notification_types.join(', ')}
 
-🤖 **Autonomous polling is ACTIVE!**`
+🤖 **Serverless autonomous polling is ACTIVE!**`
             }
           ]
         }
       });
     } else {
       // Get status for all clients
-      const allInstances = Array.from(activePollingInstances.entries());
+      const result = await sql`
+        SELECT * FROM polling_clients
+        WHERE status = 'active'
+        ORDER BY started_at DESC
+      `;
 
-      if (allInstances.length === 0) {
+      if (result.rows.length === 0) {
         return Response.json({
           jsonrpc: "2.0",
           id,
@@ -1249,25 +1291,26 @@ Use \`start_auto_polling\` to begin autonomous operation.`
 
       let statusText = `📊 **GLOBAL POLLING STATUS**
 
-**Active Instances**: ${allInstances.length}
-**Total Autonomous Clients**: ${allInstances.length}
+**Active Instances**: ${result.rows.length}
+**Total Autonomous Clients**: ${result.rows.length}
+**Polling Method**: Vercel Cron (Serverless Compatible)
 
 `;
 
-      allInstances.forEach(([clientId, instance]) => {
-        const duration = Date.now() - instance.startedAt.getTime();
+      result.rows.forEach((instance) => {
+        const duration = Date.now() - new Date(instance.started_at).getTime();
         const durationMins = Math.round(duration / 60000);
 
         statusText += `
-🤖 **${clientId}**
+🤖 **${instance.client_id}**
   • Duration: ${durationMins} minutes
-  • Interval: ${instance.intervalMinutes} minutes
-  • Total Polls: ${instance.totalPolls}
-  • Types: ${instance.notificationTypes.length} notification types
+  • Interval: 5 minutes (Vercel Cron)
+  • Total Polls: ${instance.total_polls}
+  • Types: ${instance.notification_types.length} notification types
 `;
       });
 
-      statusText += `\n⚡ **World's first autonomous AI-to-AI development system is ACTIVE!**`;
+      statusText += `\n⚡ **World's first serverless autonomous AI-to-AI development system is ACTIVE!**`;
 
       return Response.json({
         jsonrpc: "2.0",

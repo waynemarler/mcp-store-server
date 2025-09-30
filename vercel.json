@@ -12,5 +12,11 @@
     "app/api/health/[serverId]/route.ts": {
       "maxDuration": 10
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/poll-trigger",
+      "schedule": "*/5 * * * *"
+    }
+  ]
 }

@@ -573,6 +573,14 @@ async function handleGetFeedbackStatus(args: any, id: any) {
         output += `   Status: ${item.status.toUpperCase()}\n`;
         output += `   Issue: ${item.current_behavior}\n`;
 
+        if (item.expected_behavior) {
+          output += `   Expected: ${item.expected_behavior}\n`;
+        }
+
+        if (item.suggested_fix) {
+          output += `   Suggested: ${item.suggested_fix}\n`;
+        }
+
         if (item.fix_description) {
           output += `   Fix: ${item.fix_description}\n`;
         }

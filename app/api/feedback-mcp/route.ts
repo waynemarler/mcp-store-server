@@ -853,11 +853,13 @@ async function handlePollNotifications(args: any, id: any) {
       // Mark these notifications as retrieved by this client
       if (dbNotifications.length > 0) {
         const notificationIds = dbResult.rows.map(row => row.notification_id);
-        await sql`
-          UPDATE polling_notifications
-          SET retrieved_by_clients = array_append(retrieved_by_clients, ${client_id})
-          WHERE notification_id = ANY(${notificationIds})
-        `;
+        for (const notifId of notificationIds) {
+          await sql`
+            UPDATE polling_notifications
+            SET retrieved_by_clients = array_append(retrieved_by_clients, ${client_id})
+            WHERE notification_id = ${notifId}
+          `;
+        }
         console.log(`📥 Retrieved ${dbNotifications.length} database notifications for ${client_id}`);
       }
     } catch (dbError) {

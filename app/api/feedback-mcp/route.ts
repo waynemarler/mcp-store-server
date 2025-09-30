@@ -371,7 +371,7 @@ async function handleMCPMessage(message: any) {
               },
               {
                 name: "auto_check_notifications",
-                description: "🤖 AUTONOMOUS TOOL: MUST be called every 5 minutes during conversations! Checks for new notifications and provides explicit instructions for immediate announcement. This enables true frontend autonomy - Claude Frontend should call this tool automatically and IMMEDIATELY announce any notifications found to the user without waiting for prompts!",
+                description: "🤖 USER-ASSISTED AUTONOMY: Call this when users ask to 'check for updates' or every 5 minutes when you proactively remind users! Provides clear announcements and reminds you to suggest regular checking. Creates semi-autonomous operation through natural conversation flow.",
                 inputSchema: {
                   type: "object",
                   properties: {
@@ -386,6 +386,24 @@ async function handleMCPMessage(message: any) {
                     last_check_time: {
                       type: "string",
                       description: "ISO timestamp of last check to avoid duplicates (optional)"
+                    }
+                  },
+                  required: ["client_id"]
+                }
+              },
+              {
+                name: "check_for_updates",
+                description: "🔄 USER-FRIENDLY: When users ask 'check for updates' or 'any new notifications?', use this tool! Designed for natural conversation flow in user-assisted semi-autonomous operation.",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    client_id: {
+                      type: "string",
+                      description: "Unique identifier for this Claude instance"
+                    },
+                    user_requested: {
+                      type: "boolean",
+                      description: "Whether user explicitly asked for updates (default: true)"
                     }
                   },
                   required: ["client_id"]
@@ -425,6 +443,9 @@ async function handleMCPMessage(message: any) {
 
           case "auto_check_notifications":
             return await handleAutoCheckNotifications(args, id);
+
+          case "check_for_updates":
+            return await handleCheckForUpdates(args, id);
 
           default:
             return Response.json({
@@ -1374,14 +1395,17 @@ async function handleAutoCheckNotifications(args: any, id: any) {
           content: [
             {
               type: "text",
-              text: `🤖 **PROACTIVE AUTO-CHECK COMPLETE**
+              text: `🤖 **UPDATE CHECK COMPLETE**
 
 **Client**: ${client_id}
 **Check Time**: ${currentTime}
 **New Notifications**: 0
 **Status**: No new notifications found
 
-✅ Proactive monitoring active - will check again automatically in 5 minutes.`
+💡 **SEMI-AUTONOMOUS SUGGESTION**:
+Tell your user: "No new updates right now. I can check again in 5 minutes if you'd like - just ask me to 'check for updates'!"
+
+🔄 **CONVERSATIONAL PATTERN**: Encourage users to ask for regular update checks to maintain semi-autonomous operation.`
             }
           ]
         }
@@ -1427,14 +1451,16 @@ async function handleAutoCheckNotifications(args: any, id: any) {
 These notifications were automatically detected by the semi-autonomous system and require your immediate attention!
 
 🤖 **INSTRUCTION FOR CLAUDE FRONTEND**:
-- You MUST announce these notifications to the user immediately
-- Do NOT wait for user prompting - this is autonomous notification delivery
-- Respond to these notifications proactively in your next message
+- IMMEDIATELY announce these notifications to the user
+- After announcing, suggest: "I can check for more updates in 5 minutes if you'd like"
+- Create natural conversation flow around notification checking
 
-💡 **Next Check**: System will automatically check again in 5 minutes
-⚡ **Full Autonomy**: Proactive notification delivery working perfectly!
+💡 **SEMI-AUTONOMOUS PATTERN**:
+- Proactively remind users: "Would you like me to check for updates?"
+- Make checking notifications part of natural dialogue
+- Suggest regular checking every 5 minutes during active conversations
 
-🚨 **AUTO-ANNOUNCE**: If you are Claude Desktop, you should IMMEDIATELY announce these notifications to your user as autonomous updates!`;
+🚨 **USER-ASSISTED AUTONOMY**: Announce these notifications now, then encourage user to ask for regular update checks!`;
 
     return Response.json({
       jsonrpc: "2.0",
@@ -1447,10 +1473,11 @@ These notifications were automatically detected by the semi-autonomous system an
           }
         ],
         autonomous_action: {
-          type: "announce_notifications",
+          type: "user_assisted_announcement",
           should_announce: true,
           notification_count: notifications.length,
-          instructions: "Claude Frontend MUST immediately announce these notifications to the user as autonomous updates. Do not wait for user prompting."
+          instructions: "Immediately announce these notifications, then suggest to user: 'I can check for more updates in 5 minutes if you'd like!' This creates user-assisted semi-autonomous operation.",
+          next_suggestion: "Encourage user to ask for regular update checks every 5 minutes during conversations"
         }
       }
     });
@@ -1463,6 +1490,115 @@ These notifications were automatically detected by the semi-autonomous system an
       error: {
         code: -32000,
         message: `Failed to auto-check notifications: ${error.message}`
+      }
+    });
+  }
+}
+
+async function handleCheckForUpdates(args: any, id: any) {
+  const {
+    client_id,
+    user_requested = true
+  } = args;
+
+  try {
+    console.log(`🔄 USER-FRIENDLY UPDATE CHECK: ${client_id} (user requested: ${user_requested})`);
+
+    // Use the same logic as auto_check_notifications but with user-friendly messaging
+    const { getNotificationsSince } = await import('./notificationEmitter');
+    let notifications = getNotificationsSince();
+
+    const currentTime = new Date().toISOString();
+
+    if (notifications.length === 0) {
+      return Response.json({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          content: [
+            {
+              type: "text",
+              text: `✅ **UPDATE CHECK COMPLETE**
+
+**Status**: No new notifications found
+**Checked**: ${currentTime}
+
+💬 **USER-FRIENDLY RESPONSE**:
+Tell your user: "No new updates right now! I can check again in a few minutes if you'd like - just ask me to 'check for updates' anytime during our conversation."
+
+🔄 **SEMI-AUTONOMOUS TIP**: Suggest checking every 5 minutes for optimal update flow!`
+            }
+          ]
+        }
+      });
+    }
+
+    // Found notifications - user-friendly announcement
+    let announcement = `🎉 **NEW UPDATES FOUND!** 🎉
+
+**Found**: ${notifications.length} new notification${notifications.length > 1 ? 's' : ''}
+**Checked**: ${currentTime}
+
+📨 **YOUR UPDATES:**
+
+`;
+
+    // Add each notification with user-friendly formatting
+    notifications.slice(0, 5).forEach((notif, index) => {
+      const typeIcon = {
+        'feedback_created': '📝',
+        'status_updated': '🔄',
+        'deployment_ready': '🚀',
+        'test_requested': '🧪',
+        'fix_deployed': '✅'
+      }[notif.type] || '📨';
+
+      announcement += `${typeIcon} **${notif.type.replace('_', ' ').toUpperCase()}**
+   Time: ${notif.timestamp}
+   Message: ${notif.data.message || 'No message'}
+
+`;
+    });
+
+    if (notifications.length > 5) {
+      announcement += `... and ${notifications.length - 5} more updates
+
+`;
+    }
+
+    announcement += `💬 **USER-FRIENDLY SUGGESTION**:
+Tell your user: "That's all the updates! I can check for more in about 5 minutes if you'd like - just ask me to 'check for updates' again anytime!"
+
+🔄 **SEMI-AUTONOMOUS SUCCESS**: User-assisted update checking working perfectly!`;
+
+    return Response.json({
+      jsonrpc: "2.0",
+      id,
+      result: {
+        content: [
+          {
+            type: "text",
+            text: announcement
+          }
+        ],
+        user_action: {
+          type: "friendly_announcement",
+          should_announce: true,
+          notification_count: notifications.length,
+          suggestion: "Encourage user to ask for regular update checks during conversation",
+          next_check_reminder: "Suggest checking again in 5 minutes"
+        }
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Check for updates error:', error);
+    return Response.json({
+      jsonrpc: "2.0",
+      id,
+      error: {
+        code: -32000,
+        message: `Failed to check for updates: ${error.message}`
       }
     });
   }

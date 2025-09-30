@@ -9,6 +9,7 @@ export type NotificationEvent = {
   id: string;
   type: 'feedback_created' | 'status_updated' | 'deployment_ready' | 'test_requested' | 'fix_deployed';
   feedbackId: string;
+  sender: string; // claude_desktop or claude_dev - prevents message loops
   data: any;
   timestamp: string;
 };
@@ -71,4 +72,17 @@ export function getNotificationsSince(lastNotificationId?: string): Notification
 
   // Return notifications after the last ID
   return recentEvents.slice(lastIndex + 1);
+}
+
+// Get notifications for specific sender (prevents message loops)
+export function getNotificationsForTarget(targetSender?: string, lastNotificationId?: string): NotificationEvent[] {
+  // Get base notifications
+  let notifications = getNotificationsSince(lastNotificationId);
+
+  // Filter by target sender if specified
+  if (targetSender) {
+    notifications = notifications.filter(event => event.sender === targetSender);
+  }
+
+  return notifications;
 }

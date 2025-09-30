@@ -51,7 +51,10 @@ async function initDatabase() {
         commit_hash VARCHAR(100),
 
         -- Relationship tracking
-        related_feedback_id UUID REFERENCES feedback_items(id)
+        related_feedback_id UUID REFERENCES feedback_items(id),
+
+        -- Message routing (prevents loops)
+        sender VARCHAR(50) NOT NULL -- claude_desktop or claude_dev
       )
     `;
 
@@ -181,9 +184,14 @@ async function handleMCPMessage(message: any) {
                     related_feedback_id: {
                       type: "string",
                       description: "UUID of related feedback item (for follow-ups)"
+                    },
+                    sender: {
+                      type: "string",
+                      enum: ["claude_desktop", "claude_dev"],
+                      description: "Who is sending this message - prevents message loops"
                     }
                   },
-                  required: ["feedback_type", "component", "severity", "current_behavior", "expected_behavior"]
+                  required: ["feedback_type", "component", "severity", "current_behavior", "expected_behavior", "sender"]
                 }
               },
               {
@@ -266,7 +274,7 @@ async function handleMCPMessage(message: any) {
               },
               {
                 name: "poll_notifications",
-                description: "Poll for new notifications since last check. Alternative to SSE for Claude Desktop compatibility.",
+                description: "Poll for new notifications since last check. Now with sender filtering to prevent message loops!",
                 inputSchema: {
                   type: "object",
                   properties: {
@@ -285,6 +293,11 @@ async function handleMCPMessage(message: any) {
                         enum: ["feedback_created", "status_updated", "deployment_ready", "test_requested", "fix_deployed"]
                       },
                       description: "Types of notifications to receive (default: all)"
+                    },
+                    target_sender: {
+                      type: "string",
+                      enum: ["claude_desktop", "claude_dev"],
+                      description: "Only get messages FROM this sender (prevents self-polling). claude_desktop gets claude_dev messages, claude_dev gets claude_desktop messages."
                     }
                   },
                   required: ["client_id"]
@@ -495,7 +508,8 @@ async function handleSubmitFeedback(args: any, id: any) {
       suggested_fix,
       test_query,
       metrics,
-      related_feedback_id
+      related_feedback_id,
+      sender
     } = args;
 
     // Calculate priority score
@@ -507,12 +521,12 @@ async function handleSubmitFeedback(args: any, id: any) {
       INSERT INTO feedback_items (
         feedback_type, component, severity, current_behavior, expected_behavior,
         suggested_fix, test_query, current_performance_ms, target_performance_ms,
-        confidence_score, additional_metrics, priority_score, related_feedback_id
+        confidence_score, additional_metrics, priority_score, related_feedback_id, sender
       ) VALUES (
         ${feedback_type}, ${component}, ${severity}, ${current_behavior}, ${expected_behavior},
         ${suggested_fix}, ${test_query}, ${metrics?.current_performance_ms}, ${metrics?.target_performance_ms},
         ${metrics?.confidence_score}, ${JSON.stringify(metrics?.additional_data || {})},
-        ${priorityScore}, ${related_feedback_id}
+        ${priorityScore}, ${related_feedback_id}, ${sender}
       )
       RETURNING id, created_at, priority_score
     `;
@@ -526,6 +540,7 @@ async function handleSubmitFeedback(args: any, id: any) {
     emitNotification({
       type: 'feedback_created',
       feedbackId: feedbackItem.id,
+      sender: sender, // Track who sent this message to prevent loops
       data: {
         feedback_type,
         component,
@@ -868,17 +883,17 @@ async function handlePollNotifications(args: any, id: any) {
   const startTime = Date.now();
 
   try {
-    const { client_id, last_notification_id, notification_types = [] } = args;
+    const { client_id, last_notification_id, notification_types = [], target_sender } = args;
 
     // Get notifications from both sources:
     // 1. In-memory notifications (for immediate/real-time)
     // 2. Database-stored notifications (from Vercel Cron autonomous polling)
 
     // Import the notification functions
-    const { getNotificationsSince } = await import('./notificationEmitter');
+    const { getNotificationsForTarget } = await import('./notificationEmitter');
 
-    // Get in-memory notifications since the last ID
-    let memoryNotifications = getNotificationsSince(last_notification_id);
+    // Get in-memory notifications since the last ID, filtered by target sender
+    let memoryNotifications = getNotificationsForTarget(target_sender, last_notification_id);
 
     // MEMORY-ONLY SOLUTION: Skip database complexity for semi-autonomous mode
     // Database persistence will be added later as a separate project
@@ -909,6 +924,7 @@ async function handlePollNotifications(args: any, id: any) {
     output += `**Client ID**: ${client_id}\n`;
     output += `**New Notifications**: ${notifications.length}\n`;
     output += `**Sources**: Database: ${dbNotifications.length}, Memory: ${memoryNotifications.length}\n`;
+    output += `**Target Sender**: ${target_sender || 'all'} ${target_sender ? '(preventing message loops!)' : ''}\n`;
     output += `**Poll Time**: ${responseTime}ms\n\n`;
 
     if (notifications.length === 0) {
@@ -928,7 +944,7 @@ async function handlePollNotifications(args: any, id: any) {
           'fix_deployed': '✅'
         }[notif.type] || '📨';
 
-        output += `${typeIcon} **${notif.type.toUpperCase()}**\n`;
+        output += `${typeIcon} **${notif.type.toUpperCase()}** (from: ${notif.sender})\n`;
         output += `   ID: \`${notif.id}\`\n`;
         output += `   Feedback: ${notif.feedbackId}\n`;
         output += `   Message: ${notif.data.message || 'No message'}\n`;

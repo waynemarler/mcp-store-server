@@ -76,24 +76,33 @@ async function storeNotificationsForPolling(notifications: any[]) {
     // Initialize database
     const { sql } = await import('@vercel/postgres');
 
+    console.log(`📤 Attempting to store ${notifications.length} notifications in database`);
+
     // Create polling_notifications table if it doesn't exist
-    await sql`
-      CREATE TABLE IF NOT EXISTS polling_notifications (
-        id SERIAL PRIMARY KEY,
-        notification_id VARCHAR(255) UNIQUE NOT NULL,
-        notification_type VARCHAR(100) NOT NULL,
-        feedback_id VARCHAR(255),
-        notification_data JSONB NOT NULL,
-        timestamp TIMESTAMPTZ NOT NULL,
-        retrieved_by_clients TEXT[] DEFAULT ARRAY[]::TEXT[],
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `;
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS polling_notifications (
+          id SERIAL PRIMARY KEY,
+          notification_id VARCHAR(255) UNIQUE NOT NULL,
+          notification_type VARCHAR(100) NOT NULL,
+          feedback_id VARCHAR(255),
+          notification_data JSONB NOT NULL,
+          timestamp TIMESTAMPTZ NOT NULL,
+          retrieved_by_clients TEXT[] DEFAULT ARRAY[]::TEXT[],
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `;
+      console.log(`✅ Database table 'polling_notifications' ready`);
+    } catch (tableError) {
+      console.error(`❌ Failed to create table:`, tableError);
+      throw tableError;
+    }
 
     // Insert new notifications
+    let successCount = 0;
     for (const notif of notifications) {
       try {
-        await sql`
+        const result = await sql`
           INSERT INTO polling_notifications (
             notification_id, notification_type, feedback_id,
             notification_data, timestamp
@@ -102,16 +111,30 @@ async function storeNotificationsForPolling(notifications: any[]) {
             ${JSON.stringify(notif)}, ${notif.timestamp}
           )
           ON CONFLICT (notification_id) DO NOTHING
+          RETURNING id
         `;
+
+        if (result.rows.length > 0) {
+          successCount++;
+          console.log(`✅ Stored notification ${notif.id} with DB ID: ${result.rows[0].id}`);
+        } else {
+          console.log(`ℹ️ Notification ${notif.id} already exists (skipped)`);
+        }
       } catch (insertError) {
-        console.error(`Failed to insert notification ${notif.id}:`, insertError);
+        console.error(`❌ Failed to insert notification ${notif.id}:`, insertError);
+        console.error(`❌ Notification data:`, JSON.stringify(notif));
       }
     }
 
-    console.log(`📥 Stored ${notifications.length} notifications in polling database`);
+    console.log(`📥 Successfully stored ${successCount}/${notifications.length} notifications in polling database`);
+
+    // Verify storage by counting
+    const countResult = await sql`SELECT COUNT(*) as total FROM polling_notifications`;
+    console.log(`📊 Total notifications now in database: ${countResult.rows[0].total}`);
 
   } catch (error) {
     console.error('❌ Failed to store notifications for polling:', error);
+    console.error('❌ Error details:', error.message);
     throw error;
   }
 }

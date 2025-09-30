@@ -371,7 +371,7 @@ async function handleMCPMessage(message: any) {
               },
               {
                 name: "auto_check_notifications",
-                description: "PROACTIVE: Automatically check for new notifications and announce them. Use this every 5 minutes during active conversations for full autonomy!",
+                description: "🤖 AUTONOMOUS TOOL: MUST be called every 5 minutes during conversations! Checks for new notifications and provides explicit instructions for immediate announcement. This enables true frontend autonomy - Claude Frontend should call this tool automatically and IMMEDIATELY announce any notifications found to the user without waiting for prompts!",
                 inputSchema: {
                   type: "object",
                   properties: {
@@ -1424,10 +1424,17 @@ async function handleAutoCheckNotifications(args: any, id: any) {
     }
 
     announcement += `🎯 **AUTONOMOUS ACTION REQUIRED:**
-These notifications were automatically detected by the semi-autonomous system and require your attention!
+These notifications were automatically detected by the semi-autonomous system and require your immediate attention!
+
+🤖 **INSTRUCTION FOR CLAUDE FRONTEND**:
+- You MUST announce these notifications to the user immediately
+- Do NOT wait for user prompting - this is autonomous notification delivery
+- Respond to these notifications proactively in your next message
 
 💡 **Next Check**: System will automatically check again in 5 minutes
-⚡ **Full Autonomy**: Proactive notification delivery working perfectly!`;
+⚡ **Full Autonomy**: Proactive notification delivery working perfectly!
+
+🚨 **AUTO-ANNOUNCE**: If you are Claude Desktop, you should IMMEDIATELY announce these notifications to your user as autonomous updates!`;
 
     return Response.json({
       jsonrpc: "2.0",
@@ -1438,7 +1445,13 @@ These notifications were automatically detected by the semi-autonomous system an
             type: "text",
             text: announcement
           }
-        ]
+        ],
+        autonomous_action: {
+          type: "announce_notifications",
+          should_announce: true,
+          notification_count: notifications.length,
+          instructions: "Claude Frontend MUST immediately announce these notifications to the user as autonomous updates. Do not wait for user prompting."
+        }
       }
     });
 

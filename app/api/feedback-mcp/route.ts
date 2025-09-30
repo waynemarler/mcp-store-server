@@ -850,15 +850,11 @@ async function handlePollNotifications(args: any, id: any) {
       `;
       console.log(`📊 Total notification entries in feedback_items: ${countResult.rows[0].total}`);
 
-      // Query feedback_items for notification entries not retrieved by this client
+      // CLAUDE DESKTOP'S FIX: Simplified query first to test basic retrieval
       const dbResult = await sql`
         SELECT id, created_at, additional_metrics
         FROM feedback_items
         WHERE feedback_type = 'notification'
-          AND (
-            additional_metrics->>'retrieved_by_clients' IS NULL
-            OR NOT (${client_id} = ANY(string_to_array(additional_metrics->>'retrieved_by_clients', ',')))
-          )
         ORDER BY created_at DESC
         LIMIT 50
       `;
@@ -872,30 +868,8 @@ async function handlePollNotifications(args: any, id: any) {
           return metrics.original_data;
         });
 
-        // Mark these notifications as retrieved by this client
-        const feedbackIds = dbResult.rows.map(row => row.id);
-        for (const fbId of feedbackIds) {
-          // Get current retrieved_by_clients list
-          const currentResult = await sql`
-            SELECT additional_metrics FROM feedback_items WHERE id = ${fbId}
-          `;
-
-          if (currentResult.rows.length > 0) {
-            const metrics = JSON.parse(currentResult.rows[0].additional_metrics);
-            const retrievedClients = metrics.retrieved_by_clients || [];
-
-            if (!retrievedClients.includes(client_id)) {
-              retrievedClients.push(client_id);
-              metrics.retrieved_by_clients = retrievedClients;
-
-              await sql`
-                UPDATE feedback_items
-                SET additional_metrics = ${JSON.stringify(metrics)}
-                WHERE id = ${fbId}
-              `;
-            }
-          }
-        }
+        // SIMPLIFIED: Skip client tracking for now to test basic retrieval
+        // TODO: Re-add client tracking once basic retrieval works
         console.log(`📥 PRAGMATIC SUCCESS: Retrieved ${dbNotifications.length} database notifications for ${client_id}`);
       }
     } catch (dbError) {

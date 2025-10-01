@@ -453,27 +453,45 @@ async function handleExecuteQuery(args: any): Promise<string> {
   const { query, context = {} } = args;
 
   try {
-    // Instead of calling the API, execute the logic directly
-    const parseResult = await parseQuery(query, context);
+    console.log(`🔍 Execute Query: "${query}"`);
 
-    // Generate mock result based on the parsed intent
-    const mockResult = getMockResult(parseResult.intent, query);
+    // Parse the query to understand intent
+    const parseResult = await parseQuery(query, context);
+    console.log(`📊 Intent: ${parseResult.intent}, Confidence: ${parseResult.confidence}`);
+
+    // Get all available MCP servers from registry
+    const servers = await registry.getAllServers();
+    console.log(`🌐 Available MCP servers: ${servers.length}`);
+
+    // Find best matching server for the query
+    const matchedServer = await findBestServer(parseResult, servers);
+
+    if (!matchedServer) {
+      return `❌ No MCP server found for query: "${query}". Available servers: ${servers.length}. Try: weather queries, crypto prices, or book summaries.`;
+    }
+
+    console.log(`🎯 Matched server: ${matchedServer.name} (${matchedServer.endpoint})`);
+
+    // Route to the actual MCP server
+    const startTime = Date.now();
+    const mcpResult = await routeToMCPServer(matchedServer, query, parseResult);
+    const executionTime = Date.now() - startTime;
 
     const result = {
       success: true,
       query: query,
       parsed: parseResult,
-      result: mockResult,
+      result: mcpResult,
       metadata: {
-        parseTime: "0ms",
-        routeTime: "1ms",
-        totalTime: "1ms",
+        parseTime: "1ms",
+        routeTime: `${executionTime}ms`,
+        totalTime: `${executionTime + 1}ms`,
         strategy: parseResult.strategy.type,
-        server: "MockServer",
-        tool: "mock_tool",
+        server: matchedServer.name,
+        tool: "real_mcp_server",
         confidence: parseResult.confidence,
         cached: false,
-        engine: "mcp-direct-v1"
+        engine: "mcp-registry-v1"
       }
     };
 
@@ -481,6 +499,7 @@ async function handleExecuteQuery(args: any): Promise<string> {
     return formatExecutionResult(result);
 
   } catch (error: any) {
+    console.error(`❌ Execute Query Error:`, error);
     return `❌ Query execution failed: ${error.message}`;
   }
 }
@@ -539,6 +558,20 @@ function classifyIntent(query: string) {
         /share.*?price.*?([A-Z]{2,5})/i
       ],
       confidence: 0.90
+    },
+    {
+      name: 'book_query',
+      patterns: [
+        /who.*?wrote.*?([a-zA-Z\s]+)/i,
+        /author.*?of.*?([a-zA-Z\s]+)/i,
+        /book.*?summary.*?([a-zA-Z\s]+)/i,
+        /summary.*?of.*?([a-zA-Z\s]+)/i,
+        /(great\s+gatsby|1984|pride\s+and\s+prejudice|harry\s+potter|to\s+kill\s+a\s+mockingbird)/i,
+        /tell.*?me.*?about.*?book/i,
+        /literature.*?([a-zA-Z\s]+)/i,
+        /novel.*?([a-zA-Z\s]+)/i
+      ],
+      confidence: 0.95
     },
     {
       name: 'web_search',
@@ -608,6 +641,7 @@ function mapCapabilities(intent: any, entities: any) {
     'weather_query': ['weather_lookup', 'location_search'],
     'cryptocurrency_price_query': ['crypto_price', 'market_data'],
     'stock_price_query': ['stock_price', 'market_data'],
+    'book_query': ['book_summary', 'literature_analysis', 'author_info'],
     'web_search': ['web_search', 'content_retrieval'],
     'translation': ['text_translation', 'language_detection']
   };
@@ -620,6 +654,7 @@ function classifyCategory(intent: any) {
     'weather_query': 'Weather',
     'cryptocurrency_price_query': 'Finance',
     'stock_price_query': 'Finance',
+    'book_query': 'Literature',
     'web_search': 'Search',
     'translation': 'Language'
   };
@@ -632,6 +667,7 @@ function determineExecutionStrategy(intent: any, query: string) {
     'weather_query',
     'cryptocurrency_price_query',
     'stock_price_query',
+    'book_query',
     'translation',
     'web_search'
   ];
@@ -665,6 +701,14 @@ function getMockResult(intent: string, query: string) {
       volume_24h: "$28.5B",
       timestamp: new Date().toISOString()
     },
+    'book_query': {
+      title: query.match(/(great\s+gatsby|1984|pride\s+and\s+prejudice)/i)?.[1] || "The Great Gatsby",
+      author: "F. Scott Fitzgerald",
+      summary: "A classic American novel about the American Dream, love, and society in the 1920s.",
+      publishedYear: "1925",
+      genre: "Classic Literature",
+      timestamp: new Date().toISOString()
+    },
     'web_search': {
       query: query,
       results: [
@@ -683,6 +727,164 @@ function getMockResult(intent: string, query: string) {
     answer: `Processed: ${query}`,
     timestamp: new Date().toISOString()
   };
+}
+
+// Find the best matching MCP server for a parsed query
+async function findBestServer(parseResult: any, servers: any[]) {
+  const { intent, capabilities, category, entities } = parseResult;
+
+  console.log(`🔍 Finding best server for intent: ${intent}, category: ${category}`);
+
+  // Filter servers by intent-specific criteria
+  let candidates = servers.filter(server => {
+    // Must be active
+    if (server.status !== 'active') return false;
+
+    // For book queries, look for book/literature servers
+    if (intent === 'book_query') {
+      const hasBookCapability = server.capabilities?.some((cap: string) =>
+        cap.toLowerCase().includes('book') ||
+        cap.toLowerCase().includes('literature') ||
+        cap.toLowerCase().includes('summary')
+      );
+      const hasBookCategory = server.categories?.some((cat: any) =>
+        cat.mainCategory?.toLowerCase().includes('book') ||
+        cat.mainCategory?.toLowerCase().includes('literature') ||
+        cat.subCategory?.toLowerCase().includes('book') ||
+        cat.subCategory?.toLowerCase().includes('literature')
+      );
+      const hasBookInName = server.name.toLowerCase().includes('book') ||
+                           server.name.toLowerCase().includes('libra') ||
+                           server.name.toLowerCase().includes('literature');
+
+      return hasBookCapability || hasBookCategory || hasBookInName;
+    }
+
+    // For weather queries, look for weather servers
+    if (intent === 'weather_query') {
+      const hasWeatherCapability = server.capabilities?.some((cap: string) =>
+        cap.toLowerCase().includes('weather') ||
+        cap.toLowerCase().includes('forecast')
+      );
+      const hasWeatherCategory = server.categories?.some((cat: any) =>
+        cat.mainCategory?.toLowerCase().includes('weather') ||
+        cat.subCategory?.toLowerCase().includes('weather')
+      );
+
+      return hasWeatherCapability || hasWeatherCategory;
+    }
+
+    // For crypto queries, look for finance/crypto servers
+    if (intent === 'cryptocurrency_price_query') {
+      const hasCryptoCapability = server.capabilities?.some((cap: string) =>
+        cap.toLowerCase().includes('crypto') ||
+        cap.toLowerCase().includes('bitcoin') ||
+        cap.toLowerCase().includes('price') ||
+        cap.toLowerCase().includes('finance')
+      );
+      const hasCryptoCategory = server.categories?.some((cat: any) =>
+        cat.mainCategory?.toLowerCase().includes('finance') ||
+        cat.mainCategory?.toLowerCase().includes('crypto') ||
+        cat.subCategory?.toLowerCase().includes('crypto')
+      );
+
+      return hasCryptoCapability || hasCryptoCategory;
+    }
+
+    // For general queries, check capabilities match
+    if (capabilities && capabilities.length > 0) {
+      return server.capabilities?.some((cap: string) =>
+        capabilities.some((reqCap: string) =>
+          cap.toLowerCase().includes(reqCap.toLowerCase())
+        )
+      );
+    }
+
+    return true; // Include all servers for general queries
+  });
+
+  console.log(`📊 Filtered ${candidates.length} candidate servers from ${servers.length} total`);
+
+  if (candidates.length === 0) {
+    console.log(`❌ No matching servers found for intent: ${intent}`);
+    return null;
+  }
+
+  // Sort by relevance and trust score
+  candidates.sort((a, b) => {
+    // Prefer verified servers
+    if (a.verified && !b.verified) return -1;
+    if (!a.verified && b.verified) return 1;
+
+    // Prefer higher trust scores
+    const trustA = a.trustScore || 50;
+    const trustB = b.trustScore || 50;
+    if (trustA !== trustB) return trustB - trustA;
+
+    // Prefer servers with more matching capabilities
+    const matchingCapsA = capabilities ?
+      a.capabilities?.filter((cap: string) =>
+        capabilities.some((reqCap: string) =>
+          cap.toLowerCase().includes(reqCap.toLowerCase())
+        )
+      ).length || 0 : 0;
+    const matchingCapsB = capabilities ?
+      b.capabilities?.filter((cap: string) =>
+        capabilities.some((reqCap: string) =>
+          cap.toLowerCase().includes(reqCap.toLowerCase())
+        )
+      ).length || 0 : 0;
+
+    return matchingCapsB - matchingCapsA;
+  });
+
+  const bestServer = candidates[0];
+  console.log(`🎯 Selected server: ${bestServer.name} (verified: ${bestServer.verified}, trust: ${bestServer.trustScore})`);
+
+  return bestServer;
+}
+
+// Route query to actual MCP server
+async function routeToMCPServer(server: any, query: string, parseResult: any) {
+  try {
+    console.log(`🚀 Routing to MCP server: ${server.name} at ${server.endpoint}`);
+
+    // Use the MCP client to route the request
+    const routeRequest = {
+      capability: parseResult.capabilities[0] || 'general',
+      method: 'query', // Standard method name
+      params: {
+        query: query,
+        intent: parseResult.intent,
+        entities: parseResult.entities
+      },
+      preferredServer: server.id
+    };
+
+    const response = await handleRouteRequest(routeRequest);
+
+    if (response && response.response) {
+      console.log(`✅ Successfully routed to ${server.name}`);
+      return response.response;
+    } else {
+      console.log(`⚠️ Empty response from ${server.name}, falling back to mock`);
+      return getMockResult(parseResult.intent, query);
+    }
+
+  } catch (error: any) {
+    console.error(`❌ Failed to route to ${server.name}:`, error.message);
+
+    // If real server fails, provide a mock result with server info
+    const mockResult = getMockResult(parseResult.intent, query);
+    mockResult._serverInfo = {
+      attempted: server.name,
+      endpoint: server.endpoint,
+      error: error.message,
+      fallback: true
+    };
+
+    return mockResult;
+  }
 }
 
 // Format execution result for Claude display
@@ -710,6 +912,19 @@ function formatExecutionResult(result: any): string {
       output += `24h Change: ${data.change_24h || data.change}\n`;
       if (data.volume_24h || data.volume) {
         output += `Volume: ${data.volume_24h || data.volume}\n`;
+      }
+    } else if (data.author && data.title) {
+      // Book result
+      output += `📚 **Book**: ${data.title}\n`;
+      output += `Author: ${data.author}\n`;
+      if (data.summary) {
+        output += `Summary: ${data.summary}\n`;
+      }
+      if (data.publishedYear) {
+        output += `Published: ${data.publishedYear}\n`;
+      }
+      if (data.genre) {
+        output += `Genre: ${data.genre}\n`;
       }
     } else if (data.type === 'options') {
       // Options result

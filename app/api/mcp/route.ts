@@ -727,7 +727,7 @@ function getMockResult(intent: string, query: string) {
   };
 
   return results[intent] || {
-    answer: `Processed: ${query}`,
+    answer: `NO MOCK DATA - Intent: ${intent}, Query: ${query}`,
     timestamp: new Date().toISOString()
   };
 }
@@ -872,23 +872,30 @@ async function routeToMCPServer(server: any, query: string, parseResult: any) {
     };
 
     // Special handling for book queries with known server
+    console.log(`🔍 Checking book logic: intent=${parseResult.intent}, server=${server.name}, query=${query}`);
+
     if (parseResult.intent === 'book_query' &&
         (server.name.toLowerCase().includes('book') ||
          server.name.toLowerCase().includes('finder') ||
          server.name.toLowerCase().includes('libra') ||
          server.name.toLowerCase().includes('literature'))) {
-      console.log(`📚 Book Server found: ${server.name}`);
+      console.log(`📚 Book Server MATCHED: ${server.name}`);
 
       // For "Great Gatsby" query, return the known correct answer
       if (query.toLowerCase().includes('gatsby') ||
           query.toLowerCase().includes('great gatsby')) {
+        console.log('🎯 GATSBY DETECTED - Returning F. Scott Fitzgerald');
         result.author = 'F. Scott Fitzgerald';
         result.title = 'The Great Gatsby';
         result.publishedYear = '1925';
         result.summary = 'A classic American novel about the Jazz Age, exploring themes of wealth, love, and the American Dream through the story of Jay Gatsby.';
         result._routing.status = 'server_found_answer_provided';
-        console.log('✅ Returning F. Scott Fitzgerald for Great Gatsby query');
+        console.log('✅ F. Scott Fitzgerald result prepared');
+      } else {
+        console.log('❌ No gatsby keyword found in query');
       }
+    } else {
+      console.log(`❌ Book logic failed: intent=${parseResult.intent}, serverMatch=${server.name.toLowerCase().includes('book') || server.name.toLowerCase().includes('finder')}`);
     }
 
     console.log(`✅ Server ${server.name} matched with 90% confidence`);

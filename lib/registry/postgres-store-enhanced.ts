@@ -514,6 +514,13 @@ export class EnhancedPostgresRegistryStore {
 
       console.log(`Enhanced store external query returned ${result.rows.length} servers from smithery_mcp_servers`);
 
+      // 🐛 DEBUG: Check if LibraLM (id=1588) is in raw SQL results
+      const libraLMRow = result.rows.find(row => row.id === 1588);
+      console.log(`🔍 DEBUG: LibraLM (id=1588) in raw SQL results:`, libraLMRow ? 'YES' : 'NO');
+      if (libraLMRow) {
+        console.log(`🔍 DEBUG: LibraLM raw data:`, JSON.stringify(libraLMRow, null, 2));
+      }
+
       let servers = result.rows.map(row => ({
         id: row.id,
         name: row.name,
@@ -551,6 +558,13 @@ export class EnhancedPostgresRegistryStore {
         raw_json: row.raw_json
       }));
 
+      // 🐛 DEBUG: Check if LibraLM survived the mapping
+      const libraLMServer = servers.find(server => server.id === 'ext_1588');
+      console.log(`🔍 DEBUG: LibraLM (ext_1588) after mapping:`, libraLMServer ? 'YES' : 'NO');
+      if (libraLMServer) {
+        console.log(`🔍 DEBUG: LibraLM mapped data:`, JSON.stringify(libraLMServer, null, 2));
+      }
+
       // Apply filtering at application level
       if (query.category) {
         servers = servers.filter(server => server.category === query.category);
@@ -558,6 +572,13 @@ export class EnhancedPostgresRegistryStore {
 
       if (query.verified !== undefined) {
         servers = servers.filter(server => server.verified === query.verified);
+      }
+
+      // 🐛 DEBUG: Final check if LibraLM survived all filtering
+      const finalLibraLM = servers.find(server => server.id === 'ext_1588');
+      console.log(`🔍 DEBUG: LibraLM (ext_1588) in final results:`, finalLibraLM ? 'YES' : 'NO');
+      if (finalLibraLM) {
+        console.log(`🔍 DEBUG: LibraLM final data:`, JSON.stringify(finalLibraLM, null, 2));
       }
 
       console.log(`Found ${servers.length} external servers from Smithery (after filtering)`);

@@ -589,11 +589,21 @@ async function handleExecuteQuery(args: any): Promise<string> {
     const servers = await registry.getAllServers();
     console.log(`🌐 Available MCP servers: ${servers.length}`);
 
-    // Check LibraLM auth status before ranking
+    // Check LibraLM auth status before ranking - DEBUG OUTPUT
     const libraLM = servers.find(s => s.id === 'ext_1588');
+    let libraDebug = "LibraLM not found";
     if (libraLM) {
       const hasAuth = !!(libraLM.apiKey || libraLM.endpoint?.includes('api_key='));
-      console.log(`🔍 LibraLM auth check: ${hasAuth ? '✅ HAS AUTH' : '❌ NO AUTH'} - apiKey: ${!!libraLM.apiKey}, endpoint: ${libraLM.endpoint?.substring(0, 50)}...`);
+      libraDebug = `LibraLM: ${hasAuth ? '✅ HAS AUTH' : '❌ NO AUTH'} - apiKey: ${!!libraLM.apiKey}, endpoint: ${libraLM.endpoint?.substring(0, 80)}`;
+      console.log(`🔍 ${libraDebug}`);
+    }
+
+    // Check Google Books for comparison
+    const googleBooks = servers.find(s => s.id === 'ext_1410');
+    let googleDebug = "Google Books not found";
+    if (googleBooks) {
+      const hasAuth = !!(googleBooks.apiKey || googleBooks.endpoint?.includes('api_key='));
+      googleDebug = `Google Books: ${hasAuth ? '✅ HAS AUTH' : '❌ NO AUTH'} - verified: ${googleBooks.verified}, endpoint: ${googleBooks.endpoint}`;
     }
 
     // Find best matching server for the query
@@ -615,6 +625,10 @@ async function handleExecuteQuery(args: any): Promise<string> {
       query: query,
       parsed: parseResult,
       result: mcpResult,
+      debug: {
+        libraLM: libraDebug,
+        googleBooks: googleDebug
+      },
       metadata: {
         parseTime: "1ms",
         routeTime: `${executionTime}ms`,
@@ -1108,6 +1122,13 @@ function formatExecutionResult(result: any): string {
 
   output += `\n\n🚀 **Performance**: ${metadata?.totalTime} (via ${metadata?.server})`;
   output += `\n🎯 **Confidence**: ${Math.round((metadata?.confidence || 0) * 100)}%`;
+
+  // Add debug info if available
+  if (result.debug) {
+    output += `\n\n🔍 **DEBUG INFO**:`;
+    output += `\n${result.debug.libraLM}`;
+    output += `\n${result.debug.googleBooks}`;
+  }
 
   return output;
 }

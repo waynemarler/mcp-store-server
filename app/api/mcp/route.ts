@@ -1038,18 +1038,24 @@ async function routeToMCPServer(server: any, query: string, parseResult: any) {
       preferredServer: server.id
     };
 
-    console.log(`📡 Making REAL call to MCP server: ${server.name}`);
+    // For external servers (with endpoint URLs), make direct MCP calls
+    if (server.endpoint && server.endpoint.startsWith('http')) {
+      console.log(`🌍 Making DIRECT MCP call to external server: ${server.name}`);
+      return await callExternalMCPServer(server, query, parseResult);
+    }
+
+    // For internal servers, use internal routing
+    console.log(`🏠 Routing to internal server: ${server.name}`);
     const response = await handleRouteRequest(routeRequest);
 
     if (response && response.response) {
-      console.log(`✅ SUCCESS: Real response from ${server.name}:`, response.response);
+      console.log(`✅ SUCCESS: Internal response from ${server.name}:`, response.response);
       return response.response;
     } else {
-      console.log(`❌ EMPTY RESPONSE from real MCP server: ${server.name}`);
+      console.log(`❌ EMPTY RESPONSE from internal server: ${server.name}`);
       return {
-        error: `Real MCP server ${server.name} returned empty response`,
+        error: `Internal server ${server.name} returned empty response`,
         server: server.name,
-        endpoint: server.endpoint,
         attempted_call: true
       };
     }
@@ -1065,6 +1071,193 @@ async function routeToMCPServer(server: any, query: string, parseResult: any) {
       error_details: error
     };
   }
+}
+
+// Generic function to call any external MCP server
+async function callExternalMCPServer(server: any, query: string, parseResult: any) {
+  try {
+    console.log(`🔗 Calling external MCP server: ${server.name} at ${server.endpoint}`);
+
+    // First, get the server's available tools
+    const toolsRequest = {
+      jsonrpc: "2.0",
+      method: "tools/list",
+      params: {},
+      id: Date.now()
+    };
+
+    console.log(`📤 Getting tools from ${server.name}`);
+
+    const toolsResponse = await fetch(server.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(toolsRequest)
+    });
+
+    if (!toolsResponse.ok) {
+      throw new Error(`HTTP ${toolsResponse.status}: ${toolsResponse.statusText}`);
+    }
+
+    const toolsResult = await toolsResponse.json();
+    console.log(`📥 Available tools from ${server.name}:`, toolsResult.result?.tools?.map(t => t.name));
+
+    // Select the most appropriate tool for the query
+    const selectedTool = selectBestTool(toolsResult.result?.tools || [], parseResult);
+
+    if (!selectedTool) {
+      throw new Error(`No suitable tools found for query intent: ${parseResult.intent}`);
+    }
+
+    console.log(`🎯 Selected tool: ${selectedTool.name}`);
+
+    // Make the actual tool call
+    const toolCallRequest = {
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: {
+        name: selectedTool.name,
+        arguments: buildToolArguments(selectedTool, query, parseResult)
+      },
+      id: Date.now()
+    };
+
+    console.log(`📤 Calling tool ${selectedTool.name} on ${server.name}`);
+
+    const toolCallResponse = await fetch(server.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(toolCallRequest)
+    });
+
+    if (!toolCallResponse.ok) {
+      throw new Error(`HTTP ${toolCallResponse.status}: ${toolCallResponse.statusText}`);
+    }
+
+    const result = await toolCallResponse.json();
+    console.log(`📥 Tool call result from ${server.name}:`, result);
+
+    // Format the response
+    if (result.result && result.result.content) {
+      return {
+        answer: result.result.content[0]?.text || 'Response received',
+        source: server.name,
+        timestamp: new Date().toISOString(),
+        tool_used: selectedTool.name
+      };
+    }
+
+    return result;
+
+  } catch (error: any) {
+    console.error(`❌ External MCP call failed for ${server.name}:`, error.message);
+    return {
+      error: `External MCP server call failed: ${error.message}`,
+      server: server.name,
+      endpoint: server.endpoint,
+      attempted_call: true
+    };
+  }
+}
+
+// Select the best tool for a given query intent
+function selectBestTool(tools: any[], parseResult: any): any {
+  if (!tools || tools.length === 0) return null;
+
+  const { intent, entities } = parseResult;
+
+  // For book queries, look for book-related tools
+  if (intent === 'book_query') {
+    const bookTools = tools.filter(tool => {
+      const name = tool.name.toLowerCase();
+      return name.includes('book') || name.includes('author') || name.includes('summary') || name.includes('details');
+    });
+
+    if (bookTools.length > 0) {
+      // Prefer more specific tools
+      return bookTools.find(t => t.name.includes('details') || t.name.includes('info')) || bookTools[0];
+    }
+  }
+
+  // For weather queries, look for weather tools
+  if (intent === 'weather_query') {
+    const weatherTools = tools.filter(tool => {
+      const name = tool.name.toLowerCase();
+      return name.includes('weather') || name.includes('forecast');
+    });
+    if (weatherTools.length > 0) return weatherTools[0];
+  }
+
+  // Default: return first available tool
+  return tools[0];
+}
+
+// Build appropriate arguments for the selected tool
+function buildToolArguments(tool: any, query: string, parseResult: any): any {
+  const { intent, entities } = parseResult;
+  const toolName = tool.name.toLowerCase();
+
+  // For book tools, extract book title/author
+  if (intent === 'book_query') {
+    if (toolName.includes('title') || toolName.includes('book')) {
+      const bookTitle = extractBookTitle(query);
+      return { title: bookTitle };
+    }
+    if (toolName.includes('author')) {
+      const author = extractAuthorName(query);
+      return { author: author };
+    }
+    // Generic book query
+    return { query: query };
+  }
+
+  // For weather tools
+  if (intent === 'weather_query' && entities.location) {
+    return { location: entities.location };
+  }
+
+  // Default: pass the raw query
+  return { query: query };
+}
+
+// Extract book title from natural language query
+function extractBookTitle(query: string): string {
+  const patterns = [
+    /who wrote (?:the book )?["']?([^"'?]+)["']?/i,
+    /author of (?:the book )?["']?([^"'?]+)["']?/i,
+    /who is the author of ["']?([^"'?]+)["']?/i,
+    /book ["']?([^"'?]+)["']?/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = query.match(pattern);
+    if (match) {
+      return match[1].trim();
+    }
+  }
+
+  return query; // Fallback to full query
+}
+
+// Extract author name from natural language query
+function extractAuthorName(query: string): string {
+  const patterns = [
+    /books by ["']?([^"'?]+)["']?/i,
+    /author ["']?([^"'?]+)["']?/i,
+    /what books did ["']?([^"'?]+)["']? write/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = query.match(pattern);
+    if (match) {
+      return match[1].trim();
+    }
+  }
+
+  return query; // Fallback to full query
 }
 
 // Format execution result for Claude display

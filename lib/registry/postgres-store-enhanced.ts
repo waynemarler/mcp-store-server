@@ -492,7 +492,12 @@ export class EnhancedPostgresRegistryStore {
       const result = await sql`
         SELECT
           'ext_' || id as id, display_name as name, description,
-          category, '[]'::jsonb as capabilities,
+          category,
+          CASE
+            WHEN tools IS NOT NULL AND jsonb_array_length(tools) > 0 THEN
+              (SELECT jsonb_agg(tool->>'name') FROM jsonb_array_elements(tools) AS tool)
+            ELSE '[]'::jsonb
+          END as capabilities,
           deployment_url as endpoint, null as api_key,
           is_verified as verified,
           CASE WHEN use_count > 100 THEN 85 ELSE 70 END as trust_score,

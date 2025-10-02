@@ -635,15 +635,17 @@ export class EnhancedPostgresRegistryStore {
 
   async getAllServers(): Promise<MCPServerMetadata[]> {
     try {
-      // Get both internal and external servers (same logic as regular postgres store)
-      const internalServers = await this.getInternalServers({});
+      // TEMP FIX: Only return Smithery servers to test the complete system
+      console.log('🧪 TEMP FIX: getAllServers returning ONLY Smithery servers for testing');
       const externalServers = await this.getExternalServers({});
+      console.log(`Enhanced store getAllServers (TEMP): ${externalServers.length} Smithery servers only`);
 
-      // Combine and return all servers
-      const allServers = [...internalServers, ...externalServers];
-      console.log(`Enhanced store getAllServers: ${internalServers.length} internal + ${externalServers.length} external = ${allServers.length} total`);
+      return externalServers;
 
-      return allServers;
+      // TODO: Restore full implementation after testing:
+      // const internalServers = await this.getInternalServers({});
+      // const allServers = [...internalServers, ...externalServers];
+      // return allServers;
     } catch (error: any) {
       console.error('Error getting all servers from enhanced Postgres:', error.message);
       return [];

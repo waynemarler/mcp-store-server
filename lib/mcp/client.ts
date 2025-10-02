@@ -4,6 +4,7 @@ import type { MCPServerMetadata } from '@/lib/types';
 
 export class MCPClient {
   private clients: Map<string, Client> = new Map();
+  private initializedServers: Set<string> = new Set();
 
   async getOrCreateClient(server: MCPServerMetadata): Promise<Client> {
     if (this.clients.has(server.id)) {
@@ -43,6 +44,12 @@ export class MCPClient {
     try {
       // Determine if this is a Smithery server by checking the endpoint
       const isSmitheryServer = server.endpoint.includes('server.smithery.ai');
+
+      // Initialize server if not already initialized (for Smithery servers)
+      if (isSmitheryServer && !this.initializedServers.has(server.id)) {
+        await this.initializeSmitheryServer(server);
+        this.initializedServers.add(server.id);
+      }
 
       // For HTTP-based MCP servers, use direct HTTP calls
       const headers: Record<string, string> = {
@@ -139,6 +146,47 @@ export class MCPClient {
     for (const [serverId] of this.clients) {
       await this.disconnect(serverId);
     }
+  }
+
+  private async initializeSmitheryServer(server: MCPServerMetadata): Promise<void> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/event-stream'
+    };
+
+    const response = await fetch(server.endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: Math.floor(Math.random() * 1000),
+        method: 'initialize',
+        params: {
+          protocolVersion: '2024-11-05',
+          capabilities: {},
+          clientInfo: {
+            name: 'mcp-store-server',
+            version: '1.0.0'
+          }
+        }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to initialize server ${server.name}: HTTP ${response.status}`);
+    }
+
+    // For SSE responses, just ensure we get a successful response
+    if (response.headers.get('content-type')?.includes('text/event-stream')) {
+      await response.text(); // Consume the response
+    } else {
+      const result = await response.json();
+      if (result.error) {
+        throw new Error(`Failed to initialize server ${server.name}: ${result.error.message}`);
+      }
+    }
+
+    console.log(`✅ Initialized Smithery server: ${server.name}`);
   }
 }
 

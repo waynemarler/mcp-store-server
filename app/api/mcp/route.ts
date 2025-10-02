@@ -991,6 +991,13 @@ async function findBestServer(parseResult: any, servers: any[]) {
     return matchingCapsB - matchingCapsA;
   });
 
+  console.log(`📊 FINAL RANKING after sort (top 5):`);
+  candidates.slice(0, 5).forEach((server, index) => {
+    const hasAuth = !!(server.apiKey || server.endpoint?.includes('api_key='));
+    const bookScore = getBookSpecificityScore(server);
+    console.log(`  ${index + 1}. ${server.name} (book: ${bookScore}, auth: ${hasAuth}, verified: ${server.verified}, trust: ${server.trustScore})`);
+  });
+
   const bestServer = candidates[0];
   const hasAuth = !!(bestServer.apiKey || bestServer.endpoint?.includes('api_key='));
   console.log(`🎯 Selected server: ${bestServer.name} (verified: ${bestServer.verified}, trust: ${bestServer.trustScore}, auth: ${hasAuth})`);

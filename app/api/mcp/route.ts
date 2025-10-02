@@ -1092,7 +1092,7 @@ async function callExternalMCPServer(server: any, query: string, parseResult: an
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        'Accept': 'application/json, text/event-stream',
         'User-Agent': 'mcp-store-server/1.0.0',
         // Add MCP-specific headers if needed
         'X-MCP-Version': '2025-06-18'
@@ -1133,7 +1133,7 @@ async function callExternalMCPServer(server: any, query: string, parseResult: an
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        'Accept': 'application/json, text/event-stream',
         'User-Agent': 'mcp-store-server/1.0.0',
         // Add MCP-specific headers if needed
         'X-MCP-Version': '2025-06-18'

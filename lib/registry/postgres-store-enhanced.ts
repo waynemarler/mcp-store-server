@@ -661,6 +661,14 @@ export class EnhancedPostgresRegistryStore {
       const externalServers = await this.getExternalServers({});
       console.log(`Enhanced store getAllServers (TEMP): ${externalServers.length} Smithery servers only`);
 
+      // 🔍 CHECK: Is LibraLM in the results?
+      const hasLibraLM = externalServers.some(s => s.id === 'ext_1588');
+      console.log(`🎯 LibraLM CHECK in getAllServers: ${hasLibraLM ? '✅ FOUND' : '❌ NOT FOUND'}`);
+      if (hasLibraLM) {
+        const libraLM = externalServers.find(s => s.id === 'ext_1588');
+        console.log(`🎯 LibraLM details: name="${libraLM?.name}", verified=${libraLM?.verified}, category="${libraLM?.category}"`);
+      }
+
       return externalServers;
 
       // TODO: Restore full implementation after testing:

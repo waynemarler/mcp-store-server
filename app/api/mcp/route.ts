@@ -53,6 +53,9 @@ const RegisterServerSchema = z.object({
 export async function POST(request: NextRequest) {
   const body = await request.json();
 
+  // Log every API call
+  console.log(`📡 MCP API called: method=${body.method}, tool=${body.params?.name}`);
+
   // Handle MCP protocol messages
   if (body.jsonrpc === "2.0") {
     return handleMCPMessage(body);
@@ -313,7 +316,13 @@ async function handleMCPMessage(message: any) {
             });
 
           case "list_all_servers":
+            console.log('🔍 API: list_all_servers called');
             const allServers = await registry.getAllServers();
+
+            // Check for LibraLM
+            const hasLibraLM = allServers.some(s => s.id === 'ext_1588');
+            console.log(`🎯 API LibraLM CHECK: ${hasLibraLM ? '✅ FOUND' : '❌ NOT FOUND'} in ${allServers.length} servers`);
+
             return Response.json({
               jsonrpc: "2.0",
               id,

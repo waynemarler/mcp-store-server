@@ -499,6 +499,19 @@ async function handleMcpFinder(args: any) {
 
       // For book queries, look for book/literature servers
       if (parseResult.intent === 'book_query') {
+        // First exclude irrelevant servers
+        const serverName = server.name.toLowerCase();
+        const isIrrelevant = serverName.includes('hotel') ||
+                            serverName.includes('booking') ||
+                            serverName.includes('facebook') ||
+                            serverName.includes('youtube') ||
+                            serverName.includes('weather') ||
+                            serverName.includes('crypto') ||
+                            serverName.includes('bitcoin') ||
+                            serverName.includes('ads');
+
+        if (isIrrelevant) return false;
+
         const hasBookCapability = server.capabilities?.some((cap: string) =>
           cap.toLowerCase().includes('book') ||
           cap.toLowerCase().includes('literature') ||
@@ -803,6 +816,28 @@ function getRealServerError(intent: string, query: string, reason: string) {
   };
 }
 
+// Score book server specificity (higher = more book-specific)
+function getBookSpecificityScore(server: any): number {
+  const name = server.name.toLowerCase();
+
+  // Highest priority: Direct book services
+  if (name.includes('libralm') || name.includes('google books') || name.includes('open library')) return 10;
+  if (name.includes('book search') || name.includes('bookstack')) return 9;
+
+  // Medium priority: General book/literature servers
+  if (name.includes('book') && !name.includes('booking')) return 8;
+  if (name.includes('literature') || name.includes('library')) return 7;
+
+  // Low priority: Tangentially related
+  if (name.includes('finder') && !name.includes('hotel') && !name.includes('job')) return 3;
+
+  // Irrelevant servers
+  if (name.includes('hotel') || name.includes('booking') || name.includes('facebook') ||
+      name.includes('youtube') || name.includes('weather') || name.includes('crypto')) return 0;
+
+  return 5; // Default score
+}
+
 // Find the best matching MCP server for a parsed query
 async function findBestServer(parseResult: any, servers: any[]) {
   const { intent, capabilities, category, entities } = parseResult;
@@ -816,6 +851,19 @@ async function findBestServer(parseResult: any, servers: any[]) {
 
     // For book queries, look for book/literature servers
     if (intent === 'book_query') {
+      // First exclude irrelevant servers
+      const serverName = server.name.toLowerCase();
+      const isIrrelevant = serverName.includes('hotel') ||
+                          serverName.includes('booking') ||
+                          serverName.includes('facebook') ||
+                          serverName.includes('youtube') ||
+                          serverName.includes('weather') ||
+                          serverName.includes('crypto') ||
+                          serverName.includes('bitcoin') ||
+                          serverName.includes('ads');
+
+      if (isIrrelevant) return false;
+
       const hasBookCapability = server.capabilities?.some((cap: string) =>
         cap.toLowerCase().includes('book') ||
         cap.toLowerCase().includes('literature') ||
@@ -885,8 +933,15 @@ async function findBestServer(parseResult: any, servers: any[]) {
     return null;
   }
 
-  // Sort by relevance and trust score
+  // Sort by relevance and trust score - prioritize book-specific servers
   candidates.sort((a, b) => {
+    // For book queries, prioritize book-specific servers
+    if (intent === 'book_query') {
+      const aBookScore = getBookSpecificityScore(a);
+      const bBookScore = getBookSpecificityScore(b);
+      if (aBookScore !== bBookScore) return bBookScore - aBookScore;
+    }
+
     // Prefer verified servers
     if (a.verified && !b.verified) return -1;
     if (!a.verified && b.verified) return 1;

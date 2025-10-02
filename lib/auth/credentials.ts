@@ -11,13 +11,9 @@ const AUTH_PROVIDERS: AuthProvider[] = [
     keyEnvVar: 'LIBRALM_API_KEY',
     servers: ['ext_1588'] // LibraLM Book Summaries server ID
   },
-  {
-    name: 'Smithery',
-    baseUrl: 'server.smithery.ai',
-    authType: 'bearer',
-    keyEnvVar: 'SMITHERY_API_KEY',
-    servers: [] // Generic Smithery servers
-  }
+  // REMOVED: Generic Smithery provider was too broad and matching all server.smithery.ai servers
+  // This was causing Google Books to incorrectly get SMITHERY_API_KEY
+  // Individual Smithery servers should have specific providers (like LibraLM above)
 ];
 
 // Smithery URL-based auth configurations

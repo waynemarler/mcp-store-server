@@ -946,6 +946,12 @@ async function findBestServer(parseResult: any, servers: any[]) {
     if (a.verified && !b.verified) return -1;
     if (!a.verified && b.verified) return 1;
 
+    // Prefer servers with authentication configured (can actually be called)
+    const aHasAuth = !!(a.apiKey || a.endpoint?.includes('api_key='));
+    const bHasAuth = !!(b.apiKey || b.endpoint?.includes('api_key='));
+    if (aHasAuth && !bHasAuth) return -1;
+    if (!aHasAuth && bHasAuth) return 1;
+
     // Prefer higher trust scores
     const trustA = a.trustScore || 50;
     const trustB = b.trustScore || 50;
@@ -969,7 +975,8 @@ async function findBestServer(parseResult: any, servers: any[]) {
   });
 
   const bestServer = candidates[0];
-  console.log(`🎯 Selected server: ${bestServer.name} (verified: ${bestServer.verified}, trust: ${bestServer.trustScore})`);
+  const hasAuth = !!(bestServer.apiKey || bestServer.endpoint?.includes('api_key='));
+  console.log(`🎯 Selected server: ${bestServer.name} (verified: ${bestServer.verified}, trust: ${bestServer.trustScore}, auth: ${hasAuth})`);
 
   return bestServer;
 }

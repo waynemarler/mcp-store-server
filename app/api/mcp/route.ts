@@ -958,16 +958,16 @@ async function findBestServer(parseResult: any, servers: any[]) {
       if (aBookScore !== bBookScore) return bBookScore - aBookScore;
     }
 
-    // Prefer verified servers
-    if (a.verified && !b.verified) return -1;
-    if (!a.verified && b.verified) return 1;
-
-    // Prefer servers with authentication configured (can actually be called)
+    // Prefer servers with authentication configured (can actually be called) - HIGHEST PRIORITY
     const aHasAuth = !!(a.apiKey || a.endpoint?.includes('api_key='));
     const bHasAuth = !!(b.apiKey || b.endpoint?.includes('api_key='));
     console.log(`🔍 AUTH DEBUG: ${a.name} (apiKey: ${!!a.apiKey}, endpoint: ${a.endpoint}, hasAuth: ${aHasAuth}) vs ${b.name} (apiKey: ${!!b.apiKey}, endpoint: ${b.endpoint}, hasAuth: ${bHasAuth})`);
     if (aHasAuth && !bHasAuth) return -1;
     if (!aHasAuth && bHasAuth) return 1;
+
+    // Prefer verified servers (but only after auth priority)
+    if (a.verified && !b.verified) return -1;
+    if (!a.verified && b.verified) return 1;
 
     // Prefer higher trust scores
     const trustA = a.trustScore || 50;

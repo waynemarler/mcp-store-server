@@ -1091,7 +1091,11 @@ async function callExternalMCPServer(server: any, query: string, parseResult: an
     const toolsResponse = await fetch(server.endpoint, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'mcp-store-server/1.0.0',
+        // Add MCP-specific headers if needed
+        'X-MCP-Version': '2025-06-18'
       },
       body: JSON.stringify(toolsRequest)
     });
@@ -1128,7 +1132,11 @@ async function callExternalMCPServer(server: any, query: string, parseResult: an
     const toolCallResponse = await fetch(server.endpoint, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'mcp-store-server/1.0.0',
+        // Add MCP-specific headers if needed
+        'X-MCP-Version': '2025-06-18'
       },
       body: JSON.stringify(toolCallRequest)
     });

@@ -589,6 +589,13 @@ async function handleExecuteQuery(args: any): Promise<string> {
     const servers = await registry.getAllServers();
     console.log(`🌐 Available MCP servers: ${servers.length}`);
 
+    // Check LibraLM auth status before ranking
+    const libraLM = servers.find(s => s.id === 'ext_1588');
+    if (libraLM) {
+      const hasAuth = !!(libraLM.apiKey || libraLM.endpoint?.includes('api_key='));
+      console.log(`🔍 LibraLM auth check: ${hasAuth ? '✅ HAS AUTH' : '❌ NO AUTH'} - apiKey: ${!!libraLM.apiKey}, endpoint: ${libraLM.endpoint?.substring(0, 50)}...`);
+    }
+
     // Find best matching server for the query
     const matchedServer = await findBestServer(parseResult, servers);
 

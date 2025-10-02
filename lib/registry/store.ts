@@ -1,6 +1,7 @@
 import type { MCPServerMetadata, MCPServerRegistration, DiscoveryQuery, HealthStatus, ServerMetric } from '@/lib/types';
 import { PostgresRegistryStore } from './postgres-store';
 import { EnhancedPostgresRegistryStore } from './postgres-store-enhanced';
+import { enhanceServerWithAuth } from '@/lib/auth';
 
 export class RegistryStore {
   private postgresStore: PostgresRegistryStore;
@@ -65,10 +66,12 @@ export class RegistryStore {
 
   async get(serverId: string): Promise<MCPServerMetadata | null> {
     if (this.useInMemory) {
-      return this.inMemoryStore.get(serverId) || null;
+      const server = this.inMemoryStore.get(serverId);
+      return server ? enhanceServerWithAuth(server) : null;
     }
 
-    return this.activeStore!.get(serverId);
+    const server = await this.activeStore!.get(serverId);
+    return server ? enhanceServerWithAuth(server) : null;
   }
 
   async discover(query: DiscoveryQuery): Promise<MCPServerMetadata[]> {
@@ -79,14 +82,17 @@ export class RegistryStore {
       const servers: MCPServerMetadata[] = [];
       for (const [id, server] of this.inMemoryStore) {
         if (this.matchesQuery(server, query)) {
-          servers.push(server);
+          // Enhance server with auth information
+          const enhancedServer = enhanceServerWithAuth(server);
+          servers.push(enhancedServer);
         }
       }
       return servers.sort((a, b) => b.trustScore - a.trustScore);
     }
 
-    // Use appropriate Postgres storage
-    return this.activeStore!.discover(query);
+    // Use appropriate Postgres storage and enhance with auth
+    const servers = await this.activeStore!.discover(query);
+    return servers.map(server => enhanceServerWithAuth(server));
   }
 
   async updateHealth(serverId: string, status: HealthStatus): Promise<void> {
@@ -116,10 +122,14 @@ export class RegistryStore {
 
   async getAllServers(): Promise<MCPServerMetadata[]> {
     if (this.useInMemory) {
-      return Array.from(this.inMemoryStore.values());
+      const servers = Array.from(this.inMemoryStore.values());
+      // Enhance all servers with auth information
+      return servers.map(server => enhanceServerWithAuth(server));
     }
 
-    return this.activeStore!.getAllServers();
+    // Get servers from Postgres and enhance with auth
+    const servers = await this.activeStore!.getAllServers();
+    return servers.map(server => enhanceServerWithAuth(server));
   }
 
   async delete(serverId: string): Promise<void> {

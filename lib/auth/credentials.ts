@@ -1,0 +1,128 @@
+// Credential storage and retrieval for MCP server authentication
+
+import type { ServerCredentials, AuthProvider } from './types';
+
+// Known auth providers and their server mappings
+const AUTH_PROVIDERS: AuthProvider[] = [
+  {
+    name: 'LibraLM',
+    baseUrl: 'server.smithery.ai/@libralm-ai',
+    authType: 'bearer',
+    keyEnvVar: 'LIBRALM_API_KEY',
+    servers: ['ext_1588'] // LibraLM Book Summaries server ID
+  },
+  {
+    name: 'Smithery',
+    baseUrl: 'server.smithery.ai',
+    authType: 'bearer',
+    keyEnvVar: 'SMITHERY_API_KEY',
+    servers: [] // Generic Smithery servers
+  }
+];
+
+// In-memory credential cache
+const credentialCache = new Map<string, ServerCredentials>();
+
+/**
+ * Get credentials for a specific server
+ */
+export function getServerCredentials(serverId: string, serverName?: string, endpoint?: string): ServerCredentials | null {
+  // Check cache first
+  if (credentialCache.has(serverId)) {
+    return credentialCache.get(serverId)!;
+  }
+
+  // Find matching auth provider
+  const provider = AUTH_PROVIDERS.find(p =>
+    p.servers.includes(serverId) ||
+    (endpoint && endpoint.includes(p.baseUrl))
+  );
+
+  if (!provider) {
+    // No auth required - return none auth type
+    const creds: ServerCredentials = {
+      serverId,
+      serverName: serverName || serverId,
+      authType: 'none',
+      lastUpdated: new Date(),
+      isActive: true
+    };
+    credentialCache.set(serverId, creds);
+    return creds;
+  }
+
+  // Get API key from environment
+  const apiKey = process.env[provider.keyEnvVar];
+
+  if (!apiKey) {
+    console.warn(`⚠️ Missing API key for ${provider.name} (${provider.keyEnvVar})`);
+    return null;
+  }
+
+  // Create credentials
+  const credentials: ServerCredentials = {
+    serverId,
+    serverName: serverName || serverId,
+    apiKey,
+    authType: provider.authType,
+    endpoint,
+    lastUpdated: new Date(),
+    isActive: true
+  };
+
+  // Cache credentials
+  credentialCache.set(serverId, credentials);
+
+  console.log(`🔑 Loaded credentials for ${provider.name} server: ${serverName}`);
+  return credentials;
+}
+
+/**
+ * Get all registered auth providers
+ */
+export function getAuthProviders(): AuthProvider[] {
+  return [...AUTH_PROVIDERS];
+}
+
+/**
+ * Add or update server credentials manually
+ */
+export function setServerCredentials(credentials: ServerCredentials): void {
+  credentialCache.set(credentials.serverId, credentials);
+  console.log(`🔑 Updated credentials for server: ${credentials.serverName}`);
+}
+
+/**
+ * Remove server credentials
+ */
+export function removeServerCredentials(serverId: string): boolean {
+  const removed = credentialCache.delete(serverId);
+  if (removed) {
+    console.log(`🗑️ Removed credentials for server: ${serverId}`);
+  }
+  return removed;
+}
+
+/**
+ * Clear all cached credentials
+ */
+export function clearCredentialCache(): void {
+  const count = credentialCache.size;
+  credentialCache.clear();
+  console.log(`🧹 Cleared ${count} cached credentials`);
+}
+
+/**
+ * Get credential cache stats
+ */
+export function getCredentialStats() {
+  const cached = credentialCache.size;
+  const withApiKeys = Array.from(credentialCache.values()).filter(c => c.apiKey).length;
+
+  return {
+    totalCached: cached,
+    withApiKeys,
+    withoutApiKeys: cached - withApiKeys,
+    providers: AUTH_PROVIDERS.length
+  };
+}

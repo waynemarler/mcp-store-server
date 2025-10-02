@@ -79,10 +79,12 @@ export function authenticateServer(server: MCPServerMetadata): AuthResult {
  * Enhance server metadata with auth information
  */
 export function enhanceServerWithAuth(server: MCPServerMetadata): MCPServerMetadata {
+  console.log(`🔍 ENHANCE AUTH DEBUG: ${server.name} (${server.id}) - Original endpoint: ${server.endpoint}`);
+
   // Check for Smithery URL-based auth first
   const smitheryUrl = getSmitheryAuthUrl(server.id);
   if (smitheryUrl) {
-    console.log(`🔑 Using Smithery URL-based auth for ${server.name}`);
+    console.log(`🔑 Using Smithery URL-based auth for ${server.name} - URL: ${smitheryUrl}`);
     return {
       ...server,
       endpoint: smitheryUrl
@@ -90,6 +92,7 @@ export function enhanceServerWithAuth(server: MCPServerMetadata): MCPServerMetad
   }
 
   // Fall back to credential-based auth
+  console.log(`🔍 Checking credentials for ${server.name} (${server.id})`);
   const credentials = getServerCredentials(
     server.id,
     server.name,
@@ -97,9 +100,11 @@ export function enhanceServerWithAuth(server: MCPServerMetadata): MCPServerMetad
   );
 
   if (!credentials || credentials.authType === 'none') {
+    console.log(`❌ No credentials found for ${server.name} - returning unchanged`);
     return server;
   }
 
+  console.log(`✅ Found credentials for ${server.name} - authType: ${credentials.authType}, hasApiKey: ${!!credentials.apiKey}`);
   // Add apiKey to server metadata so mcpClient.callTool() can use it
   return {
     ...server,

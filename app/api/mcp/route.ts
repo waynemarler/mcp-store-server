@@ -602,8 +602,10 @@ async function handleExecuteQuery(args: any): Promise<string> {
     const googleBooks = servers.find(s => s.id === 'ext_1410');
     let googleDebug = "Google Books not found";
     if (googleBooks) {
-      const hasAuth = !!(googleBooks.apiKey || googleBooks.endpoint?.includes('api_key='));
-      googleDebug = `Google Books: ${hasAuth ? '✅ HAS AUTH' : '❌ NO AUTH'} - verified: ${googleBooks.verified}, endpoint: ${googleBooks.endpoint}`;
+      const hasApiKey = !!googleBooks.apiKey;
+      const hasApiKeyInUrl = !!googleBooks.endpoint?.includes('api_key=');
+      const hasAuth = hasApiKey || hasApiKeyInUrl;
+      googleDebug = `Google Books: ${hasAuth ? '✅ HAS AUTH' : '❌ NO AUTH'} - apiKey: ${hasApiKey}, api_key_in_url: ${hasApiKeyInUrl}, verified: ${googleBooks.verified}, endpoint: ${googleBooks.endpoint}`;
     }
 
     // Find best matching server for the query

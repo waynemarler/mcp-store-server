@@ -965,6 +965,7 @@ async function findBestServer(parseResult: any, servers: any[]) {
     // Prefer servers with authentication configured (can actually be called)
     const aHasAuth = !!(a.apiKey || a.endpoint?.includes('api_key='));
     const bHasAuth = !!(b.apiKey || b.endpoint?.includes('api_key='));
+    console.log(`🔍 AUTH DEBUG: ${a.name} (apiKey: ${!!a.apiKey}, endpoint: ${a.endpoint}, hasAuth: ${aHasAuth}) vs ${b.name} (apiKey: ${!!b.apiKey}, endpoint: ${b.endpoint}, hasAuth: ${bHasAuth})`);
     if (aHasAuth && !bHasAuth) return -1;
     if (!aHasAuth && bHasAuth) return 1;
 

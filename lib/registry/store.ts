@@ -84,6 +84,7 @@ export class RegistryStore {
         if (this.matchesQuery(server, query)) {
           // Enhance server with auth information
           const enhancedServer = enhanceServerWithAuth(server);
+          console.log(`🔑 AUTH ENHANCEMENT: ${server.name} (${server.id}) - Original endpoint: ${server.endpoint} → Enhanced endpoint: ${enhancedServer.endpoint}, apiKey: ${!!enhancedServer.apiKey}`);
           servers.push(enhancedServer);
         }
       }
@@ -92,7 +93,11 @@ export class RegistryStore {
 
     // Use appropriate Postgres storage and enhance with auth
     const servers = await this.activeStore!.discover(query);
-    return servers.map(server => enhanceServerWithAuth(server));
+    return servers.map(server => {
+      const enhancedServer = enhanceServerWithAuth(server);
+      console.log(`🔑 AUTH ENHANCEMENT: ${server.name} (${server.id}) - Original endpoint: ${server.endpoint} → Enhanced endpoint: ${enhancedServer.endpoint}, apiKey: ${!!enhancedServer.apiKey}`);
+      return enhancedServer;
+    });
   }
 
   async updateHealth(serverId: string, status: HealthStatus): Promise<void> {

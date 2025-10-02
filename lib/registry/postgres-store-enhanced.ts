@@ -634,7 +634,20 @@ export class EnhancedPostgresRegistryStore {
   }
 
   async getAllServers(): Promise<MCPServerMetadata[]> {
-    return this.discover({});
+    try {
+      // Get both internal and external servers (same logic as regular postgres store)
+      const internalServers = await this.getInternalServers({});
+      const externalServers = await this.getExternalServers({});
+
+      // Combine and return all servers
+      const allServers = [...internalServers, ...externalServers];
+      console.log(`Enhanced store getAllServers: ${internalServers.length} internal + ${externalServers.length} external = ${allServers.length} total`);
+
+      return allServers;
+    } catch (error: any) {
+      console.error('Error getting all servers from enhanced Postgres:', error.message);
+      return [];
+    }
   }
 
   async delete(serverId: string): Promise<void> {

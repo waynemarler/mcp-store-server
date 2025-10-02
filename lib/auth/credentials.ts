@@ -20,6 +20,11 @@ const AUTH_PROVIDERS: AuthProvider[] = [
   }
 ];
 
+// Smithery URL-based auth configurations
+const SMITHERY_AUTH_URLS: Record<string, string> = {
+  'ext_1588': 'https://server.smithery.ai/@libralm-ai/libralm_mcp_server/mcp?api_key=93ad3877-ed8d-4a21-a662-673c6ca7a970&profile=back-otter-YNMNuN'
+};
+
 // In-memory credential cache
 const credentialCache = new Map<string, ServerCredentials>();
 
@@ -126,3 +131,13 @@ export function getCredentialStats() {
     providers: AUTH_PROVIDERS.length
   };
 }
+
+/**
+ * Get Smithery auth URL for a server ID
+ */
+export function getSmitheryAuthUrl(serverId: string): string | null {
+  return SMITHERY_AUTH_URLS[serverId] || null;
+}
+
+// Export for external access
+export { SMITHERY_AUTH_URLS };

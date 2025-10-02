@@ -1,7 +1,7 @@
 // Main authentication management for MCP servers
 
 import type { AuthResult, ServerCredentials } from './types';
-import { getServerCredentials } from './credentials';
+import { getServerCredentials, getSmitheryAuthUrl } from './credentials';
 import type { MCPServerMetadata } from '@/lib/types';
 
 /**
@@ -79,6 +79,17 @@ export function authenticateServer(server: MCPServerMetadata): AuthResult {
  * Enhance server metadata with auth information
  */
 export function enhanceServerWithAuth(server: MCPServerMetadata): MCPServerMetadata {
+  // Check for Smithery URL-based auth first
+  const smitheryUrl = getSmitheryAuthUrl(server.id);
+  if (smitheryUrl) {
+    console.log(`🔑 Using Smithery URL-based auth for ${server.name}`);
+    return {
+      ...server,
+      endpoint: smitheryUrl
+    };
+  }
+
+  // Fall back to credential-based auth
   const credentials = getServerCredentials(
     server.id,
     server.name,
@@ -95,6 +106,8 @@ export function enhanceServerWithAuth(server: MCPServerMetadata): MCPServerMetad
     apiKey: credentials.apiKey
   };
 }
+
+// getSmitheryAuthUrl is now imported from credentials.ts
 
 /**
  * Check if a server requires authentication

@@ -514,11 +514,11 @@ export class EnhancedPostgresRegistryStore {
 
       console.log(`Enhanced store external query returned ${result.rows.length} servers from smithery_mcp_servers`);
 
-      // 🐛 DEBUG: Check if LibraLM (id=1588) is in raw SQL results
-      const libraLMRow = result.rows.find(row => row.id === 1588);
-      console.log(`🔍 DEBUG: LibraLM (id=1588) in raw SQL results:`, libraLMRow ? 'YES' : 'NO');
+      // 🐛 DEBUG: Check if LibraLM (ext_1588) is in SQL results (after 'ext_' transformation)
+      const libraLMRow = result.rows.find(row => row.id === 'ext_1588');
+      console.log(`🔍 DEBUG: LibraLM (ext_1588) in SQL results:`, libraLMRow ? 'YES' : 'NO');
       if (libraLMRow) {
-        console.log(`🔍 DEBUG: LibraLM raw data:`, JSON.stringify(libraLMRow, null, 2));
+        console.log(`🔍 DEBUG: LibraLM SQL data:`, JSON.stringify(libraLMRow, null, 2));
       }
 
       let servers = result.rows.map(row => ({

@@ -41,13 +41,23 @@ export class MCPClient {
     args: any
   ): Promise<any> {
     try {
+      // Determine if this is a Smithery server by checking the endpoint
+      const isSmitheryServer = server.endpoint.includes('server.smithery.ai');
+
       // For HTTP-based MCP servers, use direct HTTP calls
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(server.apiKey ? { 'Authorization': `Bearer ${server.apiKey}` } : {})
+      };
+
+      // Add required Accept headers for Smithery servers
+      if (isSmitheryServer) {
+        headers['Accept'] = 'application/json, text/event-stream';
+      }
+
       const response = await fetch(server.endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(server.apiKey ? { 'Authorization': `Bearer ${server.apiKey}` } : {})
-        },
+        headers,
         body: JSON.stringify({
           jsonrpc: '2.0',
           id: Math.floor(Math.random() * 1000),
@@ -63,13 +73,42 @@ export class MCPClient {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const result = await response.json();
+      // Handle Server-Sent Events format for Smithery servers
+      if (isSmitheryServer && response.headers.get('content-type')?.includes('text/event-stream')) {
+        const text = await response.text();
 
-      if (result.error) {
-        throw new Error(`MCP Error: ${result.error.message}`);
+        // Parse SSE format: "event: message\ndata: {json}\n\n"
+        const lines = text.trim().split('\n');
+        let jsonData = '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            jsonData = line.substring(6); // Remove "data: " prefix
+            break;
+          }
+        }
+
+        if (!jsonData) {
+          throw new Error('No data found in SSE response');
+        }
+
+        const result = JSON.parse(jsonData);
+
+        if (result.error) {
+          throw new Error(`MCP Error: ${result.error.message}`);
+        }
+
+        return result.result;
+      } else {
+        // Standard JSON response
+        const result = await response.json();
+
+        if (result.error) {
+          throw new Error(`MCP Error: ${result.error.message}`);
+        }
+
+        return result.result;
       }
-
-      return result.result;
     } catch (error: any) {
       console.error(`Error calling tool ${toolName} on server ${server.id}:`, error);
       throw new Error(`Failed to call tool: ${error.message}`);

@@ -42,12 +42,15 @@ export class MCPClient {
     toolName: string,
     args: any
   ): Promise<any> {
+    console.log(`🎯 CALLING TOOL: ${toolName} on ${server.name} (${server.id}) - Endpoint: ${server.endpoint}`);
     try {
       // Determine if this is a Smithery server by checking the endpoint
       const isSmitheryServer = server.endpoint.includes('server.smithery.ai');
+      console.log(`🔍 Server type: ${isSmitheryServer ? 'Smithery' : 'Regular'} - Args:`, JSON.stringify(args));
 
       // Initialize server if not already initialized (for Smithery servers)
-      if (isSmitheryServer && !this.initializedServers.has(server.id)) {
+      // Skip initialization if we already have a session ID
+      if (isSmitheryServer && !this.initializedServers.has(server.id) && !this.sessionStore.has(server.id)) {
         await this.initializeSmitheryServer(server);
         this.initializedServers.add(server.id);
       }
@@ -69,6 +72,7 @@ export class MCPClient {
         }
       }
 
+      console.log(`🚀 MAKING FETCH REQUEST to ${server.endpoint}`);
       const response = await fetch(server.endpoint, {
         method: 'POST',
         headers,
@@ -80,9 +84,11 @@ export class MCPClient {
             name: toolName,
             arguments: args
           }
-        })
+        }),
+        signal: AbortSignal.timeout(45000) // 45 second timeout
       });
 
+      console.log(`📡 FETCH RESPONSE: ${response.status} ${response.statusText}`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -121,15 +127,19 @@ export class MCPClient {
           throw new Error(`MCP Error: ${result.error.message}`);
         }
 
+        console.log(`✅ SSE RESPONSE SUCCESS - Tool: ${toolName}, Server: ${server.name}`);
         return result.result;
       } else {
         // Standard JSON response
+        console.log(`📄 PARSING JSON RESPONSE - Tool: ${toolName}, Server: ${server.name}`);
         const result = await response.json();
 
         if (result.error) {
+          console.error(`❌ MCP ERROR in response:`, result.error);
           throw new Error(`MCP Error: ${result.error.message}`);
         }
 
+        console.log(`✅ JSON RESPONSE SUCCESS - Tool: ${toolName}, Server: ${server.name}`);
         return result.result;
       }
     } catch (error: any) {
@@ -185,7 +195,8 @@ export class MCPClient {
             version: '1.0.0'
           }
         }
-      })
+      }),
+      signal: AbortSignal.timeout(30000) // 30 second timeout for initialization
     });
 
     if (!response.ok) {

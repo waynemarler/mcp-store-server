@@ -8,9 +8,9 @@ export class PostgresRegistryStore {
 
   private async initializeTables() {
     try {
-      // Create servers table
+      // Create internal servers table
       await sql`
-        CREATE TABLE IF NOT EXISTS mcp_servers (
+        CREATE TABLE IF NOT EXISTS internal_mcp_servers (
           id VARCHAR(255) PRIMARY KEY,
           name VARCHAR(255) NOT NULL,
           description TEXT,
@@ -28,20 +28,20 @@ export class PostgresRegistryStore {
 
       // Create capability index
       await sql`
-        CREATE INDEX IF NOT EXISTS idx_mcp_servers_capabilities
-        ON mcp_servers USING GIN (capabilities)
+        CREATE INDEX IF NOT EXISTS idx_internal_mcp_servers_capabilities
+        ON internal_mcp_servers USING GIN (capabilities)
       `;
 
       // Create category index
       await sql`
-        CREATE INDEX IF NOT EXISTS idx_mcp_servers_category
-        ON mcp_servers (category)
+        CREATE INDEX IF NOT EXISTS idx_internal_mcp_servers_category
+        ON internal_mcp_servers (category)
       `;
 
       // Create verified index
       await sql`
-        CREATE INDEX IF NOT EXISTS idx_mcp_servers_verified
-        ON mcp_servers (verified)
+        CREATE INDEX IF NOT EXISTS idx_internal_mcp_servers_verified
+        ON internal_mcp_servers (verified)
       `;
 
       console.log('Postgres tables initialized successfully');
@@ -55,7 +55,7 @@ export class PostgresRegistryStore {
       console.log('Registering server in Postgres:', server.id);
 
       await sql`
-        INSERT INTO mcp_servers (
+        INSERT INTO internal_mcp_servers (
           id, name, description, category, capabilities, endpoint,
           api_key, verified, trust_score, created_at, updated_at
         ) VALUES (
@@ -91,7 +91,7 @@ export class PostgresRegistryStore {
   async get(serverId: string): Promise<MCPServerMetadata | null> {
     try {
       const result = await sql`
-        SELECT * FROM mcp_servers WHERE id = ${serverId}
+        SELECT * FROM internal_mcp_servers WHERE id = ${serverId}
       `;
 
       if (result.rows.length === 0) {
@@ -142,29 +142,74 @@ export class PostgresRegistryStore {
         params.push(query.verified);
       }
 
-      const queryText = `
-        SELECT * FROM mcp_servers
-        ${whereClause}
-        ORDER BY trust_score DESC, created_at DESC
-      `;
+      // Query both internal and external servers (internal_mcp_servers is currently empty)
+      const [internalResult, externalResult] = await Promise.allSettled([
+        // Internal servers (currently empty)
+        sql.query(`
+          SELECT * FROM internal_mcp_servers
+          ${whereClause}
+          ORDER BY trust_score DESC, created_at DESC
+        `, params),
+        // External servers from Smithery
+        sql.query(`
+          SELECT
+            'ext_' || id as id, display_name as name, description,
+            category,
+            CASE
+              WHEN tools IS NOT NULL AND jsonb_array_length(tools) > 0 THEN
+                (SELECT jsonb_agg(tool->>'name') FROM jsonb_array_elements(tools) AS tool)
+              ELSE '[]'::jsonb
+            END as capabilities,
+            deployment_url as endpoint, null as api_key,
+            is_verified as verified,
+            CASE WHEN use_count > 100 THEN 85 ELSE 70 END as trust_score,
+            source_created_at as last_health_check,
+            source_created_at as created_at, updated_at
+          FROM smithery_mcp_servers
+          ${whereClause.replace('capabilities @>', 'tools @>')}
+          ORDER BY use_count DESC, source_created_at DESC
+        `, params)
+      ]);
 
-      const result = await sql.query(queryText, params);
+      // Add internal servers if successful
+      if (internalResult.status === 'fulfilled') {
+        const internalServers = internalResult.value.rows.map(row => ({
+          id: row.id,
+          name: row.name,
+          description: row.description,
+          category: row.category,
+          capabilities: row.capabilities,
+          endpoint: row.endpoint,
+          apiKey: row.api_key,
+          verified: row.verified,
+          trustScore: row.trust_score,
+          status: 'active' as const,
+          lastHealthCheck: row.last_health_check ? new Date(row.last_health_check) : undefined,
+          createdAt: new Date(row.created_at),
+          updatedAt: new Date(row.updated_at)
+        }));
+        servers.push(...internalServers);
+      }
 
-      const servers = result.rows.map(row => ({
-        id: row.id,
-        name: row.name,
-        description: row.description,
-        category: row.category,
-        capabilities: row.capabilities,
-        endpoint: row.endpoint,
-        apiKey: row.api_key,
-        verified: row.verified,
-        trustScore: row.trust_score,
-        status: 'active' as const,
-        lastHealthCheck: row.last_health_check ? new Date(row.last_health_check) : undefined,
-        createdAt: new Date(row.created_at),
-        updatedAt: new Date(row.updated_at)
-      }));
+      // Add external servers if successful
+      if (externalResult.status === 'fulfilled') {
+        const externalServers = externalResult.value.rows.map(row => ({
+          id: row.id,
+          name: row.name,
+          description: row.description,
+          category: row.category,
+          capabilities: row.capabilities,
+          endpoint: row.endpoint,
+          apiKey: null,
+          verified: row.verified,
+          trustScore: row.trust_score,
+          status: 'active' as const,
+          lastHealthCheck: row.last_health_check ? new Date(row.last_health_check) : undefined,
+          createdAt: new Date(row.created_at),
+          updatedAt: new Date(row.updated_at)
+        }));
+        servers.push(...externalServers);
+      }
 
       console.log(`Found ${servers.length} servers in Postgres`);
       return servers;
@@ -177,7 +222,7 @@ export class PostgresRegistryStore {
   async updateHealth(serverId: string, status: HealthStatus): Promise<void> {
     try {
       await sql`
-        UPDATE mcp_servers
+        UPDATE internal_mcp_servers
         SET last_health_check = ${status.lastCheck.toISOString()}
         WHERE id = ${serverId}
       `;
@@ -189,7 +234,7 @@ export class PostgresRegistryStore {
   async getHealth(serverId: string): Promise<HealthStatus | null> {
     try {
       const result = await sql`
-        SELECT id, last_health_check FROM mcp_servers WHERE id = ${serverId}
+        SELECT id, last_health_check FROM internal_mcp_servers WHERE id = ${serverId}
       `;
 
       if (result.rows.length === 0) {
@@ -217,7 +262,7 @@ export class PostgresRegistryStore {
             id, name, description, category, capabilities, endpoint,
             api_key, verified, trust_score, last_health_check,
             created_at, updated_at, 'internal' as source
-          FROM mcp_servers
+          FROM internal_mcp_servers
           ORDER BY trust_score DESC, created_at DESC
         `,
         sql`
@@ -316,7 +361,7 @@ export class PostgresRegistryStore {
   async delete(serverId: string): Promise<void> {
     try {
       await sql`
-        DELETE FROM mcp_servers WHERE id = ${serverId}
+        DELETE FROM internal_mcp_servers WHERE id = ${serverId}
       `;
       console.log('Server deleted from Postgres:', serverId);
     } catch (error: any) {

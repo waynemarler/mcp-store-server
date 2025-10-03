@@ -1078,7 +1078,43 @@ async function callExternalMCPServer(server: any, query: string, parseResult: an
   try {
     console.log(`🔗 Calling external MCP server: ${server.name} at ${server.endpoint}`);
 
-    // First, get the server's available tools
+    // First, initialize the MCP server
+    const initRequest = {
+      jsonrpc: "2.0",
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: {
+          name: "mcp-store-server",
+          version: "1.0.0"
+        }
+      },
+      id: Date.now()
+    };
+
+    console.log(`🤝 Initializing MCP server: ${server.name}`);
+
+    const initResponse = await fetch(server.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream',
+        'User-Agent': 'mcp-store-server/1.0.0',
+        'X-MCP-Version': '2025-06-18'
+      },
+      body: JSON.stringify(initRequest)
+    });
+
+    if (!initResponse.ok) {
+      throw new Error(`Initialization failed: HTTP ${initResponse.status}: ${initResponse.statusText}`);
+    }
+
+    // Handle SSE response format if needed
+    const initText = await initResponse.text();
+    console.log(`✅ MCP server ${server.name} initialized successfully`);
+
+    // Then, get the server's available tools
     const toolsRequest = {
       jsonrpc: "2.0",
       method: "tools/list",

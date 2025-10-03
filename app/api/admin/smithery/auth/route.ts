@@ -33,7 +33,7 @@ export async function POST() {
     console.log('🔄 Initiating Smithery OAuth flow...');
 
     // Use LibraLM as a test server to trigger OAuth
-    const testServerUrl = 'https://server.smithery.ai/@libralm-ai/libralm_mcp_server/mcp';
+    const testServerUrl = new URL('https://server.smithery.ai/@libralm-ai/libralm_mcp_server/mcp');
 
     const transport = new StreamableHTTPClientTransport(
       testServerUrl,

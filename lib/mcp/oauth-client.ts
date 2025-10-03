@@ -23,7 +23,7 @@ export class OAuthMCPClient {
 
     // Create transport with shared Smithery OAuth
     const transport = new StreamableHTTPClientTransport(
-      server.endpoint,
+      new URL(server.endpoint),
       { authProvider: smitheryOAuth }
     );
 

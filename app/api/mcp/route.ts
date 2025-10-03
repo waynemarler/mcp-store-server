@@ -1099,7 +1099,7 @@ async function callExternalMCPServer(server: any, query: string, parseResult: an
   try {
     console.log(`🔗 Calling external MCP server: ${server.name} at ${server.endpoint}`);
 
-    // First, initialize the MCP server
+    // First, initialize the MCP server and get session ID
     const initRequest = {
       jsonrpc: "2.0",
       method: "initialize",
@@ -1131,18 +1131,21 @@ async function callExternalMCPServer(server: any, query: string, parseResult: an
       throw new Error(`Initialization failed: HTTP ${initResponse.status}: ${initResponse.statusText}`);
     }
 
-    // Handle SSE response format if needed
+    // Extract session ID from response headers
+    const sessionId = initResponse.headers.get('mcp-session-id');
+    console.log(`📌 Got session ID: ${sessionId}`);
+
+    // Parse initialization response
     const initText = await initResponse.text();
     const initResult = parseSSEResponse(initText);
 
-    // Check if initialization was successful
     if (initResult.error) {
       throw new Error(`Initialization error: ${JSON.stringify(initResult.error)}`);
     }
 
     console.log(`✅ MCP server ${server.name} initialized successfully`);
 
-    // Then, get the server's available tools
+    // Now get tools using the session ID
     const toolsRequest = {
       jsonrpc: "2.0",
       method: "tools/list",
@@ -1152,15 +1155,21 @@ async function callExternalMCPServer(server: any, query: string, parseResult: an
 
     console.log(`📤 Getting tools from ${server.name}`);
 
+    const toolsHeaders: any = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/event-stream',
+      'User-Agent': 'mcp-store-server/1.0.0',
+      'X-MCP-Version': '2025-06-18'
+    };
+
+    // Include session ID if available
+    if (sessionId) {
+      toolsHeaders['mcp-session-id'] = sessionId;
+    }
+
     const toolsResponse = await fetch(server.endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json, text/event-stream',
-        'User-Agent': 'mcp-store-server/1.0.0',
-        // Add MCP-specific headers if needed
-        'X-MCP-Version': '2025-06-18'
-      },
+      headers: toolsHeaders,
       body: JSON.stringify(toolsRequest)
     });
 
@@ -1194,15 +1203,21 @@ async function callExternalMCPServer(server: any, query: string, parseResult: an
 
     console.log(`📤 Calling tool ${selectedTool.name} on ${server.name}`);
 
+    const toolCallHeaders: any = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/event-stream',
+      'User-Agent': 'mcp-store-server/1.0.0',
+      'X-MCP-Version': '2025-06-18'
+    };
+
+    // Include session ID if available
+    if (sessionId) {
+      toolCallHeaders['mcp-session-id'] = sessionId;
+    }
+
     const toolCallResponse = await fetch(server.endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json, text/event-stream',
-        'User-Agent': 'mcp-store-server/1.0.0',
-        // Add MCP-specific headers if needed
-        'X-MCP-Version': '2025-06-18'
-      },
+      headers: toolCallHeaders,
       body: JSON.stringify(toolCallRequest)
     });
 

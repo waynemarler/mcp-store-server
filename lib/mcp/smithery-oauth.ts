@@ -1,8 +1,8 @@
 // Service-to-service OAuth for all Smithery MCP servers
 // One OAuth flow works for all Smithery MCPs
 
+import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import type {
-  OAuthClientProvider,
   OAuthClientInformation,
   OAuthClientMetadata,
   OAuthTokens

@@ -1,8 +1,8 @@
 // OAuth Provider for Smithery MCP servers
 // Based on: https://docs.smithery.ai/use/connect
 
+import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import type {
-  OAuthClientProvider,
   OAuthClientInformation,
   OAuthClientMetadata,
   OAuthTokens

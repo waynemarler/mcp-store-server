@@ -7,6 +7,7 @@ import type {
   OAuthClientMetadata,
   OAuthTokens
 } from "@modelcontextprotocol/sdk/shared/auth.js";
+import { oauthStore } from "@/lib/db/oauth-store";
 
 export class SmitheryServiceOAuth implements OAuthClientProvider {
   private static _instance: SmitheryServiceOAuth;
@@ -20,6 +21,9 @@ export class SmitheryServiceOAuth implements OAuthClientProvider {
       : "http://localhost:3000"
   ) {
     console.log('🔄 Smithery Service OAuth initialized - Base URL:', this.baseUrl);
+    // Initialize OAuth store table
+    oauthStore.initialize().catch(console.error);
+    // Load tokens from database on initialization
     this.loadStoredTokens();
     this.loadStoredClientInfo();
   }
@@ -48,24 +52,46 @@ export class SmitheryServiceOAuth implements OAuthClientProvider {
     };
   }
 
-  clientInformation(): OAuthClientInformation | undefined {
-    return this._clientInfo;
+  async clientInformation(): Promise<OAuthClientInformation | undefined> {
+    // Try memory first
+    if (this._clientInfo) {
+      return this._clientInfo;
+    }
+    // Load from database
+    const stored = await oauthStore.getClientInfo('smithery');
+    if (stored) {
+      this._clientInfo = stored;
+      return stored;
+    }
+    return undefined;
   }
 
   async saveClientInformation(info: OAuthClientInformation): Promise<void> {
     this._clientInfo = info;
-    // TODO: Store in database for persistence
-    console.log('🔑 Saved Smithery client information');
+    // Store in database for persistence
+    await oauthStore.saveClientInfo('smithery', info);
+    console.log('🔑 Saved Smithery client information to database');
   }
 
-  tokens(): OAuthTokens | undefined {
-    return this._tokens;
+  async tokens(): Promise<OAuthTokens | undefined> {
+    // Try memory first
+    if (this._tokens) {
+      return this._tokens;
+    }
+    // Load from database
+    const stored = await oauthStore.getTokens('smithery');
+    if (stored) {
+      this._tokens = stored;
+      return stored;
+    }
+    return undefined;
   }
 
   async saveTokens(tokens: OAuthTokens): Promise<void> {
     this._tokens = tokens;
-    // TODO: Store in environment variables or secure database
-    console.log('✅ Saved Smithery tokens - valid for ALL Smithery MCPs');
+    // Store in database for persistence
+    await oauthStore.saveTokens('smithery', tokens);
+    console.log('✅ Saved Smithery tokens to database - valid for ALL Smithery MCPs');
   }
 
   async redirectToAuthorization(url: URL): Promise<void> {
@@ -85,44 +111,69 @@ export class SmitheryServiceOAuth implements OAuthClientProvider {
 
   async saveCodeVerifier(verifier: string): Promise<void> {
     this._codeVerifier = verifier;
+    // Store in database for persistence across requests
+    await oauthStore.saveCodeVerifier('smithery', verifier);
   }
 
   async codeVerifier(): Promise<string> {
-    if (!this._codeVerifier) {
-      throw new Error("No code verifier stored");
+    // Try memory first
+    if (this._codeVerifier) {
+      return this._codeVerifier;
     }
-    return this._codeVerifier;
+    // Load from database
+    const stored = await oauthStore.getCodeVerifier('smithery');
+    if (stored) {
+      this._codeVerifier = stored;
+      return stored;
+    }
+    throw new Error("No code verifier stored");
   }
 
   // Check if we have valid tokens
-  isAuthenticated(): boolean {
-    return !!this._tokens && !!this._tokens.access_token;
+  async isAuthenticated(): Promise<boolean> {
+    const tokens = await this.tokens();
+    return !!tokens && !!tokens.access_token;
   }
 
-  // Load tokens from storage (environment variables for now)
-  private loadStoredTokens(): void {
-    if (process.env.SMITHERY_ACCESS_TOKEN) {
-      this._tokens = {
-        access_token: process.env.SMITHERY_ACCESS_TOKEN,
-        token_type: "Bearer",
-        // Add other token fields if available
-        ...(process.env.SMITHERY_REFRESH_TOKEN && {
-          refresh_token: process.env.SMITHERY_REFRESH_TOKEN
-        })
-      };
-      console.log('✅ Loaded stored Smithery tokens from environment');
+  // Load tokens from storage
+  private async loadStoredTokens(): Promise<void> {
+    try {
+      const tokens = await oauthStore.getTokens('smithery');
+      if (tokens) {
+        this._tokens = tokens;
+        console.log('✅ Loaded stored Smithery tokens from database');
+      } else if (process.env.SMITHERY_ACCESS_TOKEN) {
+        // Fallback to environment variables
+        this._tokens = {
+          access_token: process.env.SMITHERY_ACCESS_TOKEN,
+          token_type: "Bearer",
+          ...(process.env.SMITHERY_REFRESH_TOKEN && {
+            refresh_token: process.env.SMITHERY_REFRESH_TOKEN
+          })
+        };
+        console.log('✅ Loaded stored Smithery tokens from environment');
+      }
+    } catch (error) {
+      console.error('Failed to load tokens:', error);
     }
   }
 
   // Load client info from storage
-  private loadStoredClientInfo(): void {
-    // For now, we'll use a hardcoded approach
-    // In production, this should come from database or environment
-    if (process.env.SMITHERY_CLIENT_ID) {
-      this._clientInfo = {
-        client_id: process.env.SMITHERY_CLIENT_ID
-      };
-      console.log('✅ Loaded stored Smithery client info from environment');
+  private async loadStoredClientInfo(): Promise<void> {
+    try {
+      const clientInfo = await oauthStore.getClientInfo('smithery');
+      if (clientInfo) {
+        this._clientInfo = clientInfo;
+        console.log('✅ Loaded stored Smithery client info from database');
+      } else if (process.env.SMITHERY_CLIENT_ID) {
+        // Fallback to environment variables
+        this._clientInfo = {
+          client_id: process.env.SMITHERY_CLIENT_ID
+        };
+        console.log('✅ Loaded stored Smithery client info from environment');
+      }
+    } catch (error) {
+      console.error('Failed to load client info:', error);
     }
   }
 }

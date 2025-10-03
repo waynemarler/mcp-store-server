@@ -13,8 +13,8 @@ import {
 
 export async function GET() {
   try {
-    const isAuthenticated = smitheryOAuth.isAuthenticated();
-    const tokens = smitheryOAuth.tokens();
+    const isAuthenticated = await smitheryOAuth.isAuthenticated();
+    const tokens = await smitheryOAuth.tokens();
 
     return NextResponse.json({
       authenticated: isAuthenticated,
@@ -40,7 +40,7 @@ export async function POST() {
     const serverUrl = 'https://server.smithery.ai/@libralm-ai/libralm_mcp_server/mcp';
 
     // Check if we already have tokens
-    if (smitheryOAuth.isAuthenticated()) {
+    if (await smitheryOAuth.isAuthenticated()) {
       return NextResponse.json({
         success: true,
         message: 'Already authenticated with Smithery',
@@ -60,7 +60,7 @@ export async function POST() {
     const authServerMetadata = await discoverAuthorizationServerMetadata(authServerUrl);
 
     // Check if we need to register the client
-    let clientInfo = smitheryOAuth.clientInformation();
+    let clientInfo = await smitheryOAuth.clientInformation();
 
     if (!clientInfo) {
       console.log('📝 Registering OAuth client...');

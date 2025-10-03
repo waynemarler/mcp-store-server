@@ -17,7 +17,7 @@ export class OAuthMCPClient {
     console.log(`🔄 Creating OAuth MCP client for ${server.name} (${server.id})`);
 
     // Check if we have Smithery authentication
-    if (!smitheryOAuth.isAuthenticated()) {
+    if (!(await smitheryOAuth.isAuthenticated())) {
       throw new Error('Smithery OAuth required - please authenticate first');
     }
 

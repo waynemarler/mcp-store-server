@@ -5,12 +5,15 @@ import { enhanceServerWithAuth } from '@/lib/auth';
 
 export class RegistryStore {
   private postgresStore: PostgresRegistryStore;
-  private enhancedPostgresStore: EnhancedPostgresRegistryStore;
+  private enhancedPostgresStore?: EnhancedPostgresRegistryStore;
   private inMemoryStore: Map<string, MCPServerMetadata> = new Map();
 
   constructor() {
     this.postgresStore = new PostgresRegistryStore();
-    this.enhancedPostgresStore = new EnhancedPostgresRegistryStore();
+    // Only create enhanced store if explicitly enabled
+    if (process.env.USE_ENHANCED_SCHEMA) {
+      this.enhancedPostgresStore = new EnhancedPostgresRegistryStore();
+    }
   }
 
   private get useInMemory(): boolean {
@@ -43,7 +46,7 @@ export class RegistryStore {
     if (this.useInMemory) {
       return null;
     }
-    return this.useEnhancedSchema ? this.enhancedPostgresStore : this.postgresStore;
+    return (this.useEnhancedSchema && this.enhancedPostgresStore) ? this.enhancedPostgresStore : this.postgresStore;
   }
 
   async register(server: any): Promise<void> {

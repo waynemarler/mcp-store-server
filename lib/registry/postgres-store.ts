@@ -142,22 +142,9 @@ export class PostgresRegistryStore {
         params.push(query.verified);
       }
 
-      // Query both internal and external servers (internal_mcp_servers is currently empty)
-      const [internalResult, externalResult] = await Promise.allSettled([
-        // Internal servers (currently empty) - skip if table doesn't exist
-        (async () => {
-          try {
-            return await sql.query(`
-              SELECT * FROM internal_mcp_servers
-              ${whereClause}
-              ORDER BY trust_score DESC, created_at DESC
-            `, params);
-          } catch (error: any) {
-            console.log('Internal servers table not ready:', error.message);
-            return { rows: [] };
-          }
-        })(),
-        // External servers from Smithery
+      // Query smithery servers first (has all the data), then internal (empty)
+      const [externalResult, internalResult] = await Promise.allSettled([
+        // External servers from Smithery (priority - has all the data)
         sql.query(`
           SELECT
             'ext_' || id as id, display_name as name, description,
@@ -175,32 +162,32 @@ export class PostgresRegistryStore {
           FROM smithery_mcp_servers
           ${whereClause.replace('capabilities @>', 'tools @>')}
           ORDER BY use_count DESC, source_created_at DESC
-        `, params)
+        `, params),
+        // Internal servers (currently empty) - skip if table doesn't exist
+        (async () => {
+          try {
+            return await sql.query(`
+              SELECT
+                id, name, description, category,
+                tools as capabilities,
+                deployment_url as endpoint, null as api_key,
+                is_verified as verified, use_count as trust_score,
+                source_created_at as last_health_check,
+                source_created_at as created_at, updated_at
+              FROM internal_mcp_servers
+              ${whereClause.replace('capabilities @>', 'tools @>')}
+              ORDER BY use_count DESC, source_created_at DESC
+            `, params);
+          } catch (error: any) {
+            console.log('Internal servers table not ready:', error.message);
+            return { rows: [] };
+          }
+        })()
       ]);
 
       const servers: MCPServerMetadata[] = [];
 
-      // Add internal servers if successful
-      if (internalResult.status === 'fulfilled') {
-        const internalServers = internalResult.value.rows.map(row => ({
-          id: row.id,
-          name: row.name,
-          description: row.description,
-          category: row.category,
-          capabilities: row.capabilities,
-          endpoint: row.endpoint,
-          apiKey: row.api_key,
-          verified: row.verified,
-          trustScore: row.trust_score,
-          status: 'active' as const,
-          lastHealthCheck: row.last_health_check ? new Date(row.last_health_check) : undefined,
-          createdAt: new Date(row.created_at),
-          updatedAt: new Date(row.updated_at)
-        }));
-        servers.push(...internalServers);
-      }
-
-      // Add external servers if successful
+      // Add external servers first (priority - has all the data)
       if (externalResult.status === 'fulfilled') {
         const externalServers = externalResult.value.rows.map(row => ({
           id: row.id,
@@ -218,6 +205,26 @@ export class PostgresRegistryStore {
           updatedAt: new Date(row.updated_at)
         }));
         servers.push(...externalServers);
+      }
+
+      // Add internal servers if successful (currently empty)
+      if (internalResult.status === 'fulfilled') {
+        const internalServers = internalResult.value.rows.map(row => ({
+          id: row.id,
+          name: row.name,
+          description: row.description,
+          category: row.category,
+          capabilities: row.capabilities,
+          endpoint: row.endpoint,
+          apiKey: row.api_key,
+          verified: row.verified,
+          trustScore: row.trust_score,
+          status: 'active' as const,
+          lastHealthCheck: row.last_health_check ? new Date(row.last_health_check) : undefined,
+          createdAt: new Date(row.created_at),
+          updatedAt: new Date(row.updated_at)
+        }));
+        servers.push(...internalServers);
       }
 
       console.log(`Found ${servers.length} servers in Postgres`);

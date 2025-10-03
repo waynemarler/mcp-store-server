@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { smitheryOAuth } from '@/lib/mcp/smithery-oauth';
+import { auth } from '@modelcontextprotocol/sdk/client/auth.js';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -30,17 +31,25 @@ export async function GET(request: NextRequest) {
     console.log('✅ Smithery OAuth authorization code received');
     console.log('🔄 Completing OAuth flow...');
 
-    // TODO: Complete the OAuth flow
-    // 1. Exchange code for tokens using the MCP SDK
-    // 2. Store tokens securely
-    // 3. Test connection to verify tokens work
+    // Complete the OAuth flow using MCP SDK
+    const serverUrl = 'https://server.smithery.ai/@libralm-ai/libralm_mcp_server/mcp';
 
-    // For now, just confirm we received the code
-    return NextResponse.json({
-      success: true,
-      message: 'Smithery OAuth flow completed - tokens valid for ALL Smithery MCPs',
-      code: code.substring(0, 10) + '...' // Show partial code for debugging
+    const result = await auth(smitheryOAuth, {
+      serverUrl,
+      authorizationCode: code,
+      scope: 'read write'
     });
+
+    if (result === 'AUTHORIZED') {
+      console.log('✅ Smithery OAuth completed successfully - tokens stored');
+      return NextResponse.json({
+        success: true,
+        message: 'Smithery OAuth flow completed - tokens valid for ALL Smithery MCPs',
+        status: 'Authenticated for all Smithery servers'
+      });
+    } else {
+      throw new Error('OAuth authorization failed - unexpected result: ' + result);
+    }
 
   } catch (error: any) {
     console.error('❌ Smithery OAuth callback error:', error);

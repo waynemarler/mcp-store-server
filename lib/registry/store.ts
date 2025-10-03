@@ -29,13 +29,11 @@ export class RegistryStore {
   }
 
   private get useEnhancedSchema(): boolean {
-    // Temporarily disable enhanced schema due to migration issues
     // Use enhanced schema if explicitly enabled
-    const enhanced = false; // Disabled: !!process.env.USE_ENHANCED_SCHEMA;
+    const enhanced = !!process.env.USE_ENHANCED_SCHEMA;
     console.log('🚀 Enhanced schema check:', {
       USE_ENHANCED_SCHEMA: process.env.USE_ENHANCED_SCHEMA,
-      enhanced: false,
-      forcedDisabled: true,
+      enhanced,
       typeof: typeof process.env.USE_ENHANCED_SCHEMA
     });
     return enhanced;

@@ -8,28 +8,28 @@ export class PostgresRegistryStore {
 
   private async initializeTables() {
     try {
-      // Create internal servers table
+      // Create internal servers table with same schema as smithery_mcp_servers
       await sql`
         CREATE TABLE IF NOT EXISTS internal_mcp_servers (
-          id VARCHAR(255) PRIMARY KEY,
-          name VARCHAR(255) NOT NULL,
+          id SERIAL PRIMARY KEY,
+          qualified_name VARCHAR(255) UNIQUE NOT NULL,
+          display_name VARCHAR(255) NOT NULL,
           description TEXT,
-          category VARCHAR(255) NOT NULL,
-          capabilities JSONB NOT NULL,
-          endpoint VARCHAR(255) NOT NULL,
-          api_key VARCHAR(255),
-          verified BOOLEAN DEFAULT FALSE,
-          trust_score INTEGER DEFAULT 50,
-          last_health_check TIMESTAMP,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          category VARCHAR(100),
+          tools JSONB DEFAULT '[]',
+          deployment_url TEXT,
+          is_verified BOOLEAN DEFAULT false,
+          use_count INTEGER DEFAULT 0,
+          author VARCHAR(255),
+          source_created_at TIMESTAMP WITH TIME ZONE,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         )
       `;
 
-      // Create capability index
+      // Create tools index (equivalent to capabilities)
       await sql`
-        CREATE INDEX IF NOT EXISTS idx_internal_mcp_servers_capabilities
-        ON internal_mcp_servers USING GIN (capabilities)
+        CREATE INDEX IF NOT EXISTS idx_internal_mcp_servers_tools
+        ON internal_mcp_servers USING GIN (tools)
       `;
 
       // Create category index
@@ -41,7 +41,7 @@ export class PostgresRegistryStore {
       // Create verified index
       await sql`
         CREATE INDEX IF NOT EXISTS idx_internal_mcp_servers_verified
-        ON internal_mcp_servers (verified)
+        ON internal_mcp_servers (is_verified)
       `;
 
       console.log('Postgres tables initialized successfully');

@@ -144,12 +144,19 @@ export class PostgresRegistryStore {
 
       // Query both internal and external servers (internal_mcp_servers is currently empty)
       const [internalResult, externalResult] = await Promise.allSettled([
-        // Internal servers (currently empty)
-        sql.query(`
-          SELECT * FROM internal_mcp_servers
-          ${whereClause}
-          ORDER BY trust_score DESC, created_at DESC
-        `, params),
+        // Internal servers (currently empty) - skip if table doesn't exist
+        (async () => {
+          try {
+            return await sql.query(`
+              SELECT * FROM internal_mcp_servers
+              ${whereClause}
+              ORDER BY trust_score DESC, created_at DESC
+            `, params);
+          } catch (error: any) {
+            console.log('Internal servers table not ready:', error.message);
+            return { rows: [] };
+          }
+        })(),
         // External servers from Smithery
         sql.query(`
           SELECT
@@ -259,14 +266,21 @@ export class PostgresRegistryStore {
     try {
       // Get both internal and external servers
       const [internalResult, externalResult] = await Promise.allSettled([
-        sql`
-          SELECT
-            id, name, description, category, capabilities, endpoint,
-            api_key, verified, trust_score, last_health_check,
-            created_at, updated_at, 'internal' as source
-          FROM internal_mcp_servers
-          ORDER BY trust_score DESC, created_at DESC
-        `,
+        (async () => {
+          try {
+            return await sql`
+              SELECT
+                id, name, description, category, capabilities, endpoint,
+                api_key, verified, trust_score, last_health_check,
+                created_at, updated_at, 'internal' as source
+              FROM internal_mcp_servers
+              ORDER BY trust_score DESC, created_at DESC
+            `;
+          } catch (error: any) {
+            console.log('Internal servers table not ready in getAllServers:', error.message);
+            return { rows: [] };
+          }
+        })(),
         sql`
           SELECT
             'ext_' || id as id, display_name as name, description,

@@ -5,6 +5,7 @@ import type { MCPServerMetadata } from '@/lib/types';
 export class MCPClient {
   private clients: Map<string, Client> = new Map();
   private initializedServers: Set<string> = new Set();
+  private sessionStore: Map<string, string> = new Map();
 
   async getOrCreateClient(server: MCPServerMetadata): Promise<Client> {
     if (this.clients.has(server.id)) {
@@ -60,6 +61,12 @@ export class MCPClient {
       // Add required Accept headers for Smithery servers
       if (isSmitheryServer) {
         headers['Accept'] = 'application/json, text/event-stream';
+
+        // Add session ID if we have one for this server
+        const sessionId = this.sessionStore.get(server.id);
+        if (sessionId) {
+          headers['mcp-session-id'] = sessionId;
+        }
       }
 
       const response = await fetch(server.endpoint, {
@@ -78,6 +85,15 @@ export class MCPClient {
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // Capture session ID from response headers for Smithery servers
+      if (isSmitheryServer) {
+        const sessionId = response.headers.get('mcp-session-id');
+        if (sessionId) {
+          this.sessionStore.set(server.id, sessionId);
+          console.log(`🔗 Captured session ID for ${server.name}: ${sessionId}`);
+        }
       }
 
       // Handle Server-Sent Events format for Smithery servers
@@ -174,6 +190,13 @@ export class MCPClient {
 
     if (!response.ok) {
       throw new Error(`Failed to initialize server ${server.name}: HTTP ${response.status}`);
+    }
+
+    // Capture session ID from initialization response
+    const sessionId = response.headers.get('mcp-session-id');
+    if (sessionId) {
+      this.sessionStore.set(server.id, sessionId);
+      console.log(`🔗 Stored session ID for ${server.name}: ${sessionId}`);
     }
 
     // For SSE responses, just ensure we get a successful response

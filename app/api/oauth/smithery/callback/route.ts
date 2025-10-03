@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     console.log('✅ Smithery OAuth authorization code received');
     console.log('🔄 Completing OAuth flow...');
 
-    // Extract client_id from state if present
+    // Extract client_id and code_verifier from state if present
     if (state) {
       try {
         const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
@@ -40,6 +40,10 @@ export async function GET(request: NextRequest) {
           await smitheryOAuth.saveClientInformation({
             client_id: stateData.client_id
           });
+        }
+        if (stateData.code_verifier) {
+          console.log('🔑 Restoring code_verifier from state');
+          await smitheryOAuth.saveCodeVerifier(stateData.code_verifier);
         }
       } catch (e) {
         console.error('Failed to parse state:', e);

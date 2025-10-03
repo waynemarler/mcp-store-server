@@ -48,9 +48,9 @@ export class MCPClient {
       const isSmitheryServer = server.endpoint.includes('server.smithery.ai');
       console.log(`🔍 Server type: ${isSmitheryServer ? 'Smithery' : 'Regular'} - Args:`, JSON.stringify(args));
 
-      // Initialize server if not already initialized (for Smithery servers)
-      // Skip initialization if we already have a session ID
-      if (isSmitheryServer && !this.initializedServers.has(server.id) && !this.sessionStore.has(server.id)) {
+      // Always initialize Smithery servers just-in-time (sessions expire quickly)
+      if (isSmitheryServer) {
+        console.log(`🔄 FRESH SESSION: Initializing LibraLM for immediate tool call`);
         await this.initializeSmitheryServer(server);
         this.initializedServers.add(server.id);
       }

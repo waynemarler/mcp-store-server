@@ -104,7 +104,17 @@ export class MCPClient {
 
       // Handle Server-Sent Events format for Smithery servers
       if (isSmitheryServer && response.headers.get('content-type')?.includes('text/event-stream')) {
-        const text = await response.text();
+        console.log(`🌊 READING SSE RESPONSE STREAM - Content-Type: ${response.headers.get('content-type')}`);
+
+        // Add timeout to response.text() since that's where it hangs
+        const textPromise = response.text();
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Response text read timeout after 20s')), 20000)
+        );
+
+        const text = await Promise.race([textPromise, timeoutPromise]) as string;
+        console.log(`📖 SSE RESPONSE TEXT LENGTH: ${text.length}`);
+        console.log(`📄 SSE RESPONSE PREVIEW: ${text.substring(0, 200)}...`);
 
         // Parse SSE format: "event: message\ndata: {json}\n\n"
         const lines = text.trim().split('\n');
@@ -118,7 +128,18 @@ export class MCPClient {
         }
 
         if (!jsonData) {
-          throw new Error('No data found in SSE response');
+          console.log(`⚠️ NO SSE DATA FOUND - Trying direct JSON parse. Full text: ${text}`);
+          // Fallback: try parsing the entire response as JSON
+          try {
+            const result = JSON.parse(text);
+            if (result.error) {
+              throw new Error(`MCP Error: ${result.error.message}`);
+            }
+            console.log(`✅ DIRECT JSON PARSE SUCCESS - Tool: ${toolName}, Server: ${server.name}`);
+            return result.result;
+          } catch (e) {
+            throw new Error(`No valid SSE data or JSON found in response: ${text.substring(0, 500)}`);
+          }
         }
 
         const result = JSON.parse(jsonData);

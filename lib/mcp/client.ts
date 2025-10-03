@@ -63,7 +63,7 @@ export class MCPClient {
 
       // Add required Accept headers for Smithery servers
       if (isSmitheryServer) {
-        headers['Accept'] = 'application/json, text/event-stream';
+        headers['Accept'] = 'application/json'; // Force JSON response instead of SSE
 
         // Add session ID if we have one for this server
         const sessionId = this.sessionStore.get(server.id);
@@ -102,17 +102,63 @@ export class MCPClient {
         }
       }
 
-      // Handle Server-Sent Events format for Smithery servers
+      // Handle Server-Sent Events format for Smithery servers (fallback only)
       if (isSmitheryServer && response.headers.get('content-type')?.includes('text/event-stream')) {
+        console.log(`⚠️ UNEXPECTED SSE RESPONSE - We requested JSON but got SSE`);
         console.log(`🌊 READING SSE RESPONSE STREAM - Content-Type: ${response.headers.get('content-type')}`);
 
-        // Add timeout to response.text() since that's where it hangs
-        const textPromise = response.text();
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Response text read timeout after 20s')), 20000)
-        );
+        // LibraLM keeps SSE connection open indefinitely, so we need to read incrementally
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error('No response body reader available');
+        }
 
-        const text = await Promise.race([textPromise, timeoutPromise]) as string;
+        const decoder = new TextDecoder();
+        let text = '';
+        let complete = false;
+
+        // Read stream with timeout per chunk
+        const startTime = Date.now();
+        while (!complete && (Date.now() - startTime) < 25000) { // 25 second total timeout
+          const chunkPromise = reader.read();
+          const timeoutPromise = new Promise<{done: boolean, value?: Uint8Array}>((_, reject) =>
+            setTimeout(() => reject(new Error('Chunk read timeout')), 5000) // 5s per chunk
+          );
+
+          try {
+            const { done, value } = await Promise.race([chunkPromise, timeoutPromise]);
+
+            if (done) {
+              complete = true;
+              break;
+            }
+
+            if (value) {
+              const chunk = decoder.decode(value, { stream: true });
+              text += chunk;
+
+              // Check if we have a complete JSON response
+              if (text.includes('{"jsonrpc"') && text.includes('}')) {
+                console.log(`📦 FOUND COMPLETE JSON in stream - stopping read`);
+                break;
+              }
+
+              // Check if we have complete SSE data
+              if (text.includes('data: {') && text.includes('}')) {
+                console.log(`📦 FOUND COMPLETE SSE DATA in stream - stopping read`);
+                break;
+              }
+            }
+          } catch (e: any) {
+            if (e.message === 'Chunk read timeout') {
+              console.log(`⏰ Chunk timeout - using partial response. Length: ${text.length}`);
+              break;
+            }
+            throw e;
+          }
+        }
+
+        reader.releaseLock();
         console.log(`📖 SSE RESPONSE TEXT LENGTH: ${text.length}`);
         console.log(`📄 SSE RESPONSE PREVIEW: ${text.substring(0, 200)}...`);
 

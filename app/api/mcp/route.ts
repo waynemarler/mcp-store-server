@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { registry } from "@/lib/registry/store";
 import { mcpClient } from "@/lib/mcp/client";
+import { oauthMCPClient } from "@/lib/mcp/oauth-client";
 import type { RouteRequest, RouteResponse } from "@/lib/types";
 
 // Schema for tool inputs
@@ -1439,12 +1440,27 @@ async function handleRouteRequest(
     : servers[0];
 
   try {
-    // Route the request to the selected server
-    const response = await mcpClient.callTool(
-      selectedServer,
-      request.method,
-      request.params
-    );
+    // Detect if this is a Smithery server
+    const isSmitheryServer = selectedServer.endpoint?.includes('server.smithery.ai');
+
+    let response;
+    if (isSmitheryServer) {
+      console.log(`🔄 Using OAuth MCP client for Smithery server: ${selectedServer.name}`);
+      // Use OAuth client for Smithery servers
+      response = await oauthMCPClient.callTool(
+        selectedServer,
+        request.method,
+        request.params
+      );
+    } else {
+      console.log(`🔄 Using regular MCP client for server: ${selectedServer.name}`);
+      // Use regular client for non-Smithery servers
+      response = await mcpClient.callTool(
+        selectedServer,
+        request.method,
+        request.params
+      );
+    }
 
     return {
       serverId: selectedServer.id,

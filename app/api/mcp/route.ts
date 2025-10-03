@@ -1073,6 +1073,27 @@ async function routeToMCPServer(server: any, query: string, parseResult: any) {
   }
 }
 
+// Helper function to parse Server-Sent Events (SSE) response format
+function parseSSEResponse(text: string): any {
+  try {
+    // Handle SSE format: "event: message\ndata: {...}"
+    if (text.includes('event: message')) {
+      const lines = text.split('\n');
+      const dataLine = lines.find(line => line.startsWith('data: '));
+      if (dataLine) {
+        const jsonStr = dataLine.substring(6); // Remove "data: " prefix
+        return JSON.parse(jsonStr);
+      }
+    }
+
+    // Try parsing as regular JSON
+    return JSON.parse(text);
+  } catch (error) {
+    console.error('Failed to parse response:', text);
+    throw new Error(`Invalid response format: ${error.message}`);
+  }
+}
+
 // Generic function to call any external MCP server
 async function callExternalMCPServer(server: any, query: string, parseResult: any) {
   try {
@@ -1140,7 +1161,8 @@ async function callExternalMCPServer(server: any, query: string, parseResult: an
       throw new Error(`HTTP ${toolsResponse.status}: ${toolsResponse.statusText}`);
     }
 
-    const toolsResult = await toolsResponse.json();
+    const toolsText = await toolsResponse.text();
+    const toolsResult = parseSSEResponse(toolsText);
     console.log(`📥 Available tools from ${server.name}:`, toolsResult.result?.tools?.map(t => t.name));
 
     // Select the most appropriate tool for the query
@@ -1181,7 +1203,8 @@ async function callExternalMCPServer(server: any, query: string, parseResult: an
       throw new Error(`HTTP ${toolCallResponse.status}: ${toolCallResponse.statusText}`);
     }
 
-    const result = await toolCallResponse.json();
+    const resultText = await toolCallResponse.text();
+    const result = parseSSEResponse(resultText);
     console.log(`📥 Tool call result from ${server.name}:`, result);
 
     // Format the response

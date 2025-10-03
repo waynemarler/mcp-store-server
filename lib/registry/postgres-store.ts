@@ -147,7 +147,7 @@ export class PostgresRegistryStore {
         // External servers from Smithery (priority - has all the data)
         sql.query(`
           SELECT
-            'ext_' || id as id, display_name as name, description,
+            id, display_name as name, description,
             category,
             CASE
               WHEN tools IS NOT NULL AND jsonb_array_length(tools) > 0 THEN
@@ -292,7 +292,7 @@ export class PostgresRegistryStore {
         })(),
         sql`
           SELECT
-            'ext_' || id as id, display_name as name, description,
+            id, display_name as name, description,
             category,
             CASE
               WHEN tools IS NOT NULL AND jsonb_array_length(tools) > 0 THEN

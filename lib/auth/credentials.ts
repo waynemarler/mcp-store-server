@@ -9,7 +9,7 @@ const AUTH_PROVIDERS: AuthProvider[] = [
     baseUrl: 'server.smithery.ai/@libralm-ai',
     authType: 'bearer',
     keyEnvVar: 'LIBRALM_API_KEY',
-    servers: ['ext_1588'] // LibraLM Book Summaries server ID
+    servers: ['1588'] // LibraLM Book Summaries server ID
   },
   // REMOVED: Generic Smithery provider was too broad and matching all server.smithery.ai servers
   // This was causing Google Books to incorrectly get SMITHERY_API_KEY
@@ -18,7 +18,7 @@ const AUTH_PROVIDERS: AuthProvider[] = [
 
 // Smithery URL-based auth configurations
 const SMITHERY_AUTH_URLS: Record<string, string> = {
-  'ext_1588': 'https://server.smithery.ai/@libralm-ai/libralm_mcp_server/mcp?api_key=93ad3877-ed8d-4a21-a662-673c6ca7a970&profile=back-otter-YNMNuN'
+  '1588': 'https://server.smithery.ai/@libralm-ai/libralm_mcp_server/mcp?api_key=93ad3877-ed8d-4a21-a662-673c6ca7a970&profile=back-otter-YNMNuN'
 };
 
 // In-memory credential cache

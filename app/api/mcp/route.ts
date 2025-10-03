@@ -1133,6 +1133,13 @@ async function callExternalMCPServer(server: any, query: string, parseResult: an
 
     // Handle SSE response format if needed
     const initText = await initResponse.text();
+    const initResult = parseSSEResponse(initText);
+
+    // Check if initialization was successful
+    if (initResult.error) {
+      throw new Error(`Initialization error: ${JSON.stringify(initResult.error)}`);
+    }
+
     console.log(`✅ MCP server ${server.name} initialized successfully`);
 
     // Then, get the server's available tools

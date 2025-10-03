@@ -277,11 +277,13 @@ export class PostgresRegistryStore {
           try {
             return await sql`
               SELECT
-                id, name, description, category, capabilities, endpoint,
-                api_key, verified, trust_score, last_health_check,
-                created_at, updated_at, 'internal' as source
+                id, display_name as name, description, category,
+                tools as capabilities, deployment_url as endpoint,
+                null as api_key, is_verified as verified, use_count as trust_score,
+                source_created_at as last_health_check,
+                source_created_at as created_at, updated_at, 'internal' as source
               FROM internal_mcp_servers
-              ORDER BY trust_score DESC, created_at DESC
+              ORDER BY use_count DESC, source_created_at DESC
             `;
           } catch (error: any) {
             console.log('Internal servers table not ready in getAllServers:', error.message);

@@ -160,7 +160,7 @@ export class PostgresRegistryStore {
             source_created_at as last_health_check,
             source_created_at as created_at, updated_at
           FROM smithery_mcp_servers
-          ${whereClause.replace('capabilities @>', 'tools @>')}
+          ${whereClause.replace('capabilities @>', 'EXISTS (SELECT 1 FROM jsonb_array_elements(tools) AS tool WHERE tool->>\'name\' =')}
           ORDER BY use_count DESC, source_created_at DESC
         `, params),
         // Internal servers (currently empty) - skip if table doesn't exist

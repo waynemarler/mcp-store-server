@@ -63,7 +63,7 @@ export class MCPClient {
 
       // Add required Accept headers for Smithery servers
       if (isSmitheryServer) {
-        headers['Accept'] = 'application/json'; // Force JSON response instead of SSE
+        headers['Accept'] = 'application/json, text/event-stream'; // LibraLM requires SSE support
 
         // Add session ID if we have one for this server
         const sessionId = this.sessionStore.get(server.id);
@@ -102,9 +102,8 @@ export class MCPClient {
         }
       }
 
-      // Handle Server-Sent Events format for Smithery servers (fallback only)
+      // Handle Server-Sent Events format for Smithery servers
       if (isSmitheryServer && response.headers.get('content-type')?.includes('text/event-stream')) {
-        console.log(`⚠️ UNEXPECTED SSE RESPONSE - We requested JSON but got SSE`);
         console.log(`🌊 READING SSE RESPONSE STREAM - Content-Type: ${response.headers.get('content-type')}`);
 
         // LibraLM keeps SSE connection open indefinitely, so we need to read incrementally

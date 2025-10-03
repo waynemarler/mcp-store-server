@@ -63,6 +63,18 @@ export async function POST() {
       if (error.message.includes('Smithery OAuth required')) {
         const authUrl = error.message.split(': ')[1];
 
+        // Parse client_id from the auth URL to store it
+        const url = new URL(authUrl);
+        const clientId = url.searchParams.get('client_id');
+
+        if (clientId) {
+          // Store client information for token exchange
+          await smitheryOAuth.saveClientInformation({
+            client_id: clientId
+          });
+          console.log('✅ Stored client_id for OAuth flow:', clientId.substring(0, 20) + '...');
+        }
+
         return NextResponse.json({
           authRequired: true,
           authUrl,

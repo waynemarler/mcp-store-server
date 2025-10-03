@@ -21,6 +21,7 @@ export class SmitheryServiceOAuth implements OAuthClientProvider {
   ) {
     console.log('🔄 Smithery Service OAuth initialized - Base URL:', this.baseUrl);
     this.loadStoredTokens();
+    this.loadStoredClientInfo();
   }
 
   // Singleton pattern - one OAuth for all Smithery servers
@@ -110,6 +111,18 @@ export class SmitheryServiceOAuth implements OAuthClientProvider {
         })
       };
       console.log('✅ Loaded stored Smithery tokens from environment');
+    }
+  }
+
+  // Load client info from storage
+  private loadStoredClientInfo(): void {
+    // For now, we'll use a hardcoded approach
+    // In production, this should come from database or environment
+    if (process.env.SMITHERY_CLIENT_ID) {
+      this._clientInfo = {
+        client_id: process.env.SMITHERY_CLIENT_ID
+      };
+      console.log('✅ Loaded stored Smithery client info from environment');
     }
   }
 }

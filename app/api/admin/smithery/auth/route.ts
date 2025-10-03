@@ -63,7 +63,7 @@ export async function POST() {
       if (error.message.includes('Smithery OAuth required')) {
         const authUrl = error.message.split(': ')[1];
 
-        // Parse client_id from the auth URL to store it
+        // Parse client_id from the auth URL
         const url = new URL(authUrl);
         const clientId = url.searchParams.get('client_id');
 
@@ -73,11 +73,16 @@ export async function POST() {
             client_id: clientId
           });
           console.log('✅ Stored client_id for OAuth flow:', clientId.substring(0, 20) + '...');
+
+          // Also add client_id to state parameter so it comes back in callback
+          const stateData = JSON.stringify({ client_id: clientId });
+          const stateBase64 = Buffer.from(stateData).toString('base64');
+          url.searchParams.set('state', stateBase64);
         }
 
         return NextResponse.json({
           authRequired: true,
-          authUrl,
+          authUrl: url.toString(),
           message: 'Visit this URL to complete Smithery OAuth',
           instructions: 'After authentication, tokens will be valid for ALL Smithery MCPs'
         });

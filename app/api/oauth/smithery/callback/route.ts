@@ -31,6 +31,21 @@ export async function GET(request: NextRequest) {
     console.log('✅ Smithery OAuth authorization code received');
     console.log('🔄 Completing OAuth flow...');
 
+    // Extract client_id from state if present
+    if (state) {
+      try {
+        const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+        if (stateData.client_id) {
+          console.log('🔑 Restoring client_id from state:', stateData.client_id.substring(0, 20) + '...');
+          await smitheryOAuth.saveClientInformation({
+            client_id: stateData.client_id
+          });
+        }
+      } catch (e) {
+        console.error('Failed to parse state:', e);
+      }
+    }
+
     // Complete the OAuth flow using MCP SDK
     const serverUrl = 'https://server.smithery.ai/@libralm-ai/libralm_mcp_server/mcp';
 

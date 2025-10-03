@@ -73,18 +73,22 @@ export class MCPClient {
       }
 
       console.log(`🚀 MAKING FETCH REQUEST to ${server.endpoint}`);
+      const requestBody = {
+        jsonrpc: '2.0',
+        id: Math.floor(Math.random() * 1000),
+        method: 'tools/call',
+        params: {
+          name: toolName,
+          ...(args && Object.keys(args).length > 0 ? { arguments: args } : {})
+        }
+      };
+
+      console.log(`📝 MCP REQUEST BODY:`, JSON.stringify(requestBody, null, 2));
+
       const response = await fetch(server.endpoint, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: Math.floor(Math.random() * 1000),
-          method: 'tools/call',
-          params: {
-            name: toolName,
-            arguments: args
-          }
-        }),
+        body: JSON.stringify(requestBody),
         signal: AbortSignal.timeout(45000) // 45 second timeout
       });
 

@@ -171,6 +171,8 @@ export class PostgresRegistryStore {
         `, params)
       ]);
 
+      const servers: MCPServerMetadata[] = [];
+
       // Add internal servers if successful
       if (internalResult.status === 'fulfilled') {
         const internalServers = internalResult.value.rows.map(row => ({

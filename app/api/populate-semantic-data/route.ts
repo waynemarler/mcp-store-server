@@ -25,6 +25,16 @@ export async function GET(request: NextRequest) {
     await sql`CREATE INDEX IF NOT EXISTS idx_capabilities_semantic_tags ON capabilities USING GIN(semantic_tags)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_capabilities_context_type ON capabilities(context_type)`;
 
+    // First, let's see what time-related capabilities actually exist
+    console.log('🔍 Checking what time-related capabilities exist...');
+    const existingTimeCapabilities = await sql`
+      SELECT capability_name FROM capabilities
+      WHERE capability_name ILIKE '%time%'
+      ORDER BY capability_name
+      LIMIT 20
+    `;
+    console.log('Found time-related capabilities:', existingTimeCapabilities.rows.map(r => r.capability_name));
+
     // Populate genuine time capabilities
     console.log('📝 Categorizing genuine time capabilities...');
 
@@ -174,6 +184,7 @@ export async function GET(request: NextRequest) {
       success: true,
       message: 'Semantic data populated successfully',
       summary: {
+        existing_time_capabilities: existingTimeCapabilities.rows,
         categories_populated: verificationResult.rows,
         time_query_capabilities: timeQueryResult.rows,
         time_capability_connections: serverConnectionsResult.rows[0]?.connection_count || 0,

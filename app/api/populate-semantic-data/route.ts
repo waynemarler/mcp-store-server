@@ -160,16 +160,12 @@ export async function GET(request: NextRequest) {
       ORDER BY context_type, capability_name
     `;
 
-    // Check server-capability connections
+    // Check server-capability connections (simplified to avoid type issues)
     const serverConnectionsResult = await sql`
-      SELECT DISTINCT s.id, s.qualified_name, s.display_name
-      FROM smithery_mcp_servers s
-      JOIN server_capabilities sc ON s.id = sc.server_id::VARCHAR
+      SELECT COUNT(*) as connection_count
+      FROM server_capabilities sc
       JOIN capabilities c ON sc.capability_id = c.id
       WHERE c.intent_category = 'time_query'
-      AND s.security_scan_passed = true
-      ORDER BY s.id
-      LIMIT 10
     `;
 
     console.log('✅ Semantic data population completed successfully!');
@@ -180,7 +176,7 @@ export async function GET(request: NextRequest) {
       summary: {
         categories_populated: verificationResult.rows,
         time_query_capabilities: timeQueryResult.rows,
-        servers_with_time_capabilities: serverConnectionsResult.rows,
+        time_capability_connections: serverConnectionsResult.rows[0]?.connection_count || 0,
         total_updates: {
           time_capabilities: timeCapabilities.rowCount,
           conversion_capabilities: conversionCapabilities.rowCount,

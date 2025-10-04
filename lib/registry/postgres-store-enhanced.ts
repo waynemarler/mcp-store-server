@@ -692,7 +692,7 @@ export class EnhancedPostgresRegistryStore {
           s.category, s.deployment_url, s.tools,
           s.is_remote, s.security_scan_passed, s.use_count, s.author
         FROM smithery_mcp_servers s
-        JOIN server_capabilities sc ON s.id = sc.server_id::VARCHAR
+        JOIN server_capabilities sc ON s.id::TEXT = sc.server_id
         JOIN capabilities c ON sc.capability_id = c.id
         WHERE c.intent_category = ${intentCategory}
           AND s.security_scan_passed = true

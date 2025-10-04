@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     const timeServersResult = await sql`
       SELECT DISTINCT s.id, s.qualified_name, s.display_name, c.capability_name
       FROM smithery_mcp_servers s
-      JOIN server_capabilities sc ON s.id = sc.server_id::VARCHAR
+      JOIN server_capabilities sc ON s.id::TEXT = sc.server_id
       JOIN capabilities c ON sc.capability_id = c.id
       WHERE (c.capability_name ILIKE '%current_time%'
              OR c.capability_name ILIKE '%get_time%'
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       SELECT DISTINCT s.id, s.qualified_name, s.display_name,
              array_agg(c.capability_name) as capabilities
       FROM smithery_mcp_servers s
-      JOIN server_capabilities sc ON s.id = sc.server_id::VARCHAR
+      JOIN server_capabilities sc ON s.id::TEXT = sc.server_id
       JOIN capabilities c ON sc.capability_id = c.id
       WHERE c.capability_name ILIKE '%time%'
         AND s.security_scan_passed = true

@@ -711,6 +711,7 @@ export class EnhancedPostgresRegistryStore {
         category: row.category || 'Utilities',
         capabilities: Array.isArray(row.tools) ? row.tools : [],
         categories: row.category ? [{
+          id: 0, // Temporary ID for legacy compatibility
           mainCategory: row.category,
           subCategory: 'Utilities',
           description: row.description || ''

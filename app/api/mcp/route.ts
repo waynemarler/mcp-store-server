@@ -3,7 +3,7 @@ import { z } from "zod";
 import { registry } from "@/lib/registry/store";
 import { mcpClient } from "@/lib/mcp/client";
 import { oauthMCPClient } from "@/lib/mcp/oauth-client";
-import type { RouteRequest, RouteResponse } from "@/lib/types";
+import type { RouteRequest, RouteResponse, MCPServerMetadata } from "@/lib/types";
 
 // Schema for tool inputs
 const DiscoverServicesSchema = z.object({
@@ -498,73 +498,28 @@ async function handleMcpFinder(args: any) {
     const parseResult = await parseQuery(query, {});
     console.log(`📊 Parsed Intent: ${parseResult.intent}, Confidence: ${parseResult.confidence}`);
 
-    // Get all available MCP servers from registry
+    // Use semantic categorization to get relevant servers
+    let candidates: MCPServerMetadata[] = [];
+
+    if (parseResult.intent && parseResult.intent !== 'general_query') {
+      // Try to get servers using semantic categorization
+      console.log(`🎯 Using semantic categorization for intent: ${parseResult.intent}`);
+      candidates = await registry.getServersByIntentCategory(parseResult.intent);
+      console.log(`📊 Found ${candidates.length} servers via semantic categorization`);
+    }
+
+    // Fallback to all servers for general queries or if semantic search fails
+    if (candidates.length === 0) {
+      console.log(`📝 Falling back to all servers (intent: ${parseResult.intent})`);
+      const allServers = await registry.getAllServers();
+      console.log(`🌐 Total MCP servers available: ${allServers.length}`);
+
+      // For general queries or when semantic data isn't available, return all active servers
+      candidates = allServers.filter(server => server.status === 'active');
+    }
+
+    // Get total server count for reporting
     const allServers = await registry.getAllServers();
-    console.log(`🌐 Total MCP servers available: ${allServers.length}`);
-
-    // Filter servers by intent-specific criteria (same logic as findBestServer)
-    let candidates = allServers.filter(server => {
-      // Must be active
-      if (server.status !== 'active') return false;
-
-      // For book queries, look for book/literature servers
-      if (parseResult.intent === 'book_query') {
-        // First exclude irrelevant servers
-        const serverName = server.name.toLowerCase();
-        const isIrrelevant = serverName.includes('hotel') ||
-                            serverName.includes('booking') ||
-                            serverName.includes('facebook') ||
-                            serverName.includes('youtube') ||
-                            serverName.includes('weather') ||
-                            serverName.includes('crypto') ||
-                            serverName.includes('bitcoin') ||
-                            serverName.includes('ads');
-
-        if (isIrrelevant) return false;
-
-        const hasBookCapability = server.capabilities?.some((cap: string) =>
-          cap.toLowerCase().includes('book') ||
-          cap.toLowerCase().includes('literature') ||
-          cap.toLowerCase().includes('summary')
-        );
-        const hasBookCategory = server.categories?.some((cat: any) =>
-          cat.mainCategory?.toLowerCase().includes('book') ||
-          cat.mainCategory?.toLowerCase().includes('literature') ||
-          cat.subCategory?.toLowerCase().includes('book') ||
-          cat.subCategory?.toLowerCase().includes('literature')
-        );
-        const hasBookInName = server.name.toLowerCase().includes('book') ||
-                             server.name.toLowerCase().includes('finder') ||
-                             server.name.toLowerCase().includes('libra') ||
-                             server.name.toLowerCase().includes('literature');
-
-        return hasBookCapability || hasBookCategory || hasBookInName;
-      }
-
-      // For time queries, look for time/clock servers
-      if (parseResult.intent === 'time_query') {
-        const hasTimeCapability = server.capabilities?.some((cap: string) =>
-          cap.toLowerCase().includes('time') ||
-          cap.toLowerCase().includes('clock') ||
-          cap.toLowerCase().includes('timezone') ||
-          cap.toLowerCase().includes('convert_time') ||
-          cap.toLowerCase().includes('get_current_time')
-        );
-        const hasTimeCategory = server.categories?.some((cat: any) =>
-          cat.mainCategory?.toLowerCase().includes('time') ||
-          cat.subCategory?.toLowerCase().includes('time') ||
-          cat.mainCategory?.toLowerCase().includes('utility') ||
-          cat.subCategory?.toLowerCase().includes('utility')
-        );
-        const hasTimeInName = server.name.toLowerCase().includes('time') ||
-                             server.name.toLowerCase().includes('clock') ||
-                             server.name.toLowerCase().includes('timezone');
-
-        return hasTimeCapability || hasTimeCategory || hasTimeInName;
-      }
-
-      return true; // Include all servers for non-specific queries
-    });
 
     return {
       query: query,
@@ -916,109 +871,24 @@ async function findBestServer(parseResult: any, servers: any[]) {
 
   console.log(`🔍 Finding best server for intent: ${intent}, category: ${category}`);
 
-  // Filter servers by intent-specific criteria
-  let candidates = servers.filter(server => {
-    // Must be active
-    if (server.status !== 'active') return false;
+  // Use semantic categorization to get relevant servers
+  let candidates: MCPServerMetadata[] = [];
 
-    // For book queries, look for book/literature servers
-    if (intent === 'book_query') {
-      // First exclude irrelevant servers
-      const serverName = server.name.toLowerCase();
-      const isIrrelevant = serverName.includes('hotel') ||
-                          serverName.includes('booking') ||
-                          serverName.includes('facebook') ||
-                          serverName.includes('youtube') ||
-                          serverName.includes('weather') ||
-                          serverName.includes('crypto') ||
-                          serverName.includes('bitcoin') ||
-                          serverName.includes('ads');
-
-      if (isIrrelevant) return false;
-
-      const hasBookCapability = server.capabilities?.some((cap: string) =>
-        cap.toLowerCase().includes('book') ||
-        cap.toLowerCase().includes('literature') ||
-        cap.toLowerCase().includes('summary')
-      );
-      const hasBookCategory = server.categories?.some((cat: any) =>
-        cat.mainCategory?.toLowerCase().includes('book') ||
-        cat.mainCategory?.toLowerCase().includes('literature') ||
-        cat.subCategory?.toLowerCase().includes('book') ||
-        cat.subCategory?.toLowerCase().includes('literature')
-      );
-      const hasBookInName = server.name.toLowerCase().includes('book') ||
-                           server.name.toLowerCase().includes('finder') ||
-                           server.name.toLowerCase().includes('libra') ||
-                           server.name.toLowerCase().includes('literature');
-
-      return hasBookCapability || hasBookCategory || hasBookInName;
+  if (intent && intent !== 'general_query') {
+    // Try to get servers using semantic categorization
+    console.log(`🎯 Using semantic categorization for intent: ${intent}`);
+    try {
+      candidates = await registry.getServersByIntentCategory(intent);
+      console.log(`📊 Found ${candidates.length} servers via semantic categorization for ${intent}`);
+    } catch (error) {
+      console.warn(`⚠️ Semantic categorization failed for ${intent}, falling back to string matching:`, error);
+      // Fallback to original string matching logic
+      candidates = servers.filter(server => server.status === 'active');
     }
-
-    // For weather queries, look for weather servers
-    if (intent === 'weather_query') {
-      const hasWeatherCapability = server.capabilities?.some((cap: string) =>
-        cap.toLowerCase().includes('weather') ||
-        cap.toLowerCase().includes('forecast')
-      );
-      const hasWeatherCategory = server.categories?.some((cat: any) =>
-        cat.mainCategory?.toLowerCase().includes('weather') ||
-        cat.subCategory?.toLowerCase().includes('weather')
-      );
-
-      return hasWeatherCapability || hasWeatherCategory;
-    }
-
-    // For crypto queries, look for finance/crypto servers
-    if (intent === 'cryptocurrency_price_query') {
-      const hasCryptoCapability = server.capabilities?.some((cap: string) =>
-        cap.toLowerCase().includes('crypto') ||
-        cap.toLowerCase().includes('bitcoin') ||
-        cap.toLowerCase().includes('price') ||
-        cap.toLowerCase().includes('finance')
-      );
-      const hasCryptoCategory = server.categories?.some((cat: any) =>
-        cat.mainCategory?.toLowerCase().includes('finance') ||
-        cat.mainCategory?.toLowerCase().includes('crypto') ||
-        cat.subCategory?.toLowerCase().includes('crypto')
-      );
-
-      return hasCryptoCapability || hasCryptoCategory;
-    }
-
-    // For time queries, look for time/clock servers
-    if (intent === 'time_query') {
-      const hasTimeCapability = server.capabilities?.some((cap: string) =>
-        cap.toLowerCase().includes('time') ||
-        cap.toLowerCase().includes('clock') ||
-        cap.toLowerCase().includes('timezone') ||
-        cap.toLowerCase().includes('convert_time') ||
-        cap.toLowerCase().includes('get_current_time')
-      );
-      const hasTimeCategory = server.categories?.some((cat: any) =>
-        cat.mainCategory?.toLowerCase().includes('time') ||
-        cat.subCategory?.toLowerCase().includes('time') ||
-        cat.mainCategory?.toLowerCase().includes('utility') ||
-        cat.subCategory?.toLowerCase().includes('utility')
-      );
-      const hasTimeInName = server.name.toLowerCase().includes('time') ||
-                           server.name.toLowerCase().includes('clock') ||
-                           server.name.toLowerCase().includes('timezone');
-
-      return hasTimeCapability || hasTimeCategory || hasTimeInName;
-    }
-
-    // For general queries, check capabilities match
-    if (capabilities && capabilities.length > 0) {
-      return server.capabilities?.some((cap: string) =>
-        capabilities.some((reqCap: string) =>
-          cap.toLowerCase().includes(reqCap.toLowerCase())
-        )
-      );
-    }
-
-    return true; // Include all servers for general queries
-  });
+  } else {
+    // For general queries, filter the passed servers to active ones
+    candidates = servers.filter(server => server.status === 'active');
+  }
 
   console.log(`📊 Filtered ${candidates.length} candidate servers from ${servers.length} total`);
 

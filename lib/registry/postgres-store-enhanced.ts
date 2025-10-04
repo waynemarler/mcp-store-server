@@ -681,6 +681,57 @@ export class EnhancedPostgresRegistryStore {
     }
   }
 
+  async getServersByIntentCategory(intentCategory: string): Promise<MCPServerMetadata[]> {
+    try {
+      console.log(`🔍 Getting servers for intent category: ${intentCategory}`);
+
+      // Use SQL JOIN to get servers with capabilities matching the intent category
+      const result = await sql`
+        SELECT DISTINCT
+          s.id, s.qualified_name, s.display_name, s.description,
+          s.category, s.deployment_url, s.tools,
+          s.is_remote, s.security_scan_passed, s.use_count, s.author
+        FROM smithery_mcp_servers s
+        JOIN server_capabilities sc ON s.id = sc.server_id::VARCHAR
+        JOIN capabilities c ON sc.capability_id = c.id
+        WHERE c.intent_category = ${intentCategory}
+          AND s.security_scan_passed = true
+          AND s.deployment_url IS NOT NULL
+        ORDER BY s.use_count DESC
+      `;
+
+      console.log(`📊 Found ${result.rows.length} servers for intent category: ${intentCategory}`);
+
+      // Convert to MCPServerMetadata format
+      const servers: MCPServerMetadata[] = result.rows.map(row => ({
+        id: `ext_${row.id}`,
+        name: row.display_name || row.qualified_name,
+        description: row.description || '',
+        endpoint: `https://server.smithery.ai/${row.qualified_name}/mcp`,
+        category: row.category || 'Utilities',
+        capabilities: Array.isArray(row.tools) ? row.tools : [],
+        categories: row.category ? [{
+          mainCategory: row.category,
+          subCategory: 'Utilities',
+          description: row.description || ''
+        }] : [],
+        verified: row.security_scan_passed,
+        trustScore: Math.min(70 + (row.use_count || 0), 100),
+        status: 'active' as const,
+        type: 'informational' as const,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }));
+
+      return servers;
+
+    } catch (error: any) {
+      console.error(`Error getting servers for intent category ${intentCategory}:`, error.message);
+      // Fallback to existing string matching logic for now
+      return [];
+    }
+  }
+
   async delete(serverId: string): Promise<void> {
     try {
       // Cascading deletes will handle related records

@@ -541,7 +541,29 @@ async function handleMcpFinder(args: any) {
         return hasBookCapability || hasBookCategory || hasBookInName;
       }
 
-      return true; // Include all servers for non-book queries
+      // For time queries, look for time/clock servers
+      if (parseResult.intent === 'time_query') {
+        const hasTimeCapability = server.capabilities?.some((cap: string) =>
+          cap.toLowerCase().includes('time') ||
+          cap.toLowerCase().includes('clock') ||
+          cap.toLowerCase().includes('timezone') ||
+          cap.toLowerCase().includes('convert_time') ||
+          cap.toLowerCase().includes('get_current_time')
+        );
+        const hasTimeCategory = server.categories?.some((cat: any) =>
+          cat.mainCategory?.toLowerCase().includes('time') ||
+          cat.subCategory?.toLowerCase().includes('time') ||
+          cat.mainCategory?.toLowerCase().includes('utility') ||
+          cat.subCategory?.toLowerCase().includes('utility')
+        );
+        const hasTimeInName = server.name.toLowerCase().includes('time') ||
+                             server.name.toLowerCase().includes('clock') ||
+                             server.name.toLowerCase().includes('timezone');
+
+        return hasTimeCapability || hasTimeCategory || hasTimeInName;
+      }
+
+      return true; // Include all servers for non-specific queries
     });
 
     return {
@@ -727,6 +749,20 @@ function classifyIntent(query: string) {
       confidence: 0.95
     },
     {
+      name: 'time_query',
+      patterns: [
+        /what\s+time\s+is\s+it/i,
+        /(current|what's\s+the)\s+time/i,
+        /time\s+in\s+([a-zA-Z\s]+)/i,
+        /what's\s+the\s+time\s+in\s+([a-zA-Z\s]+)/i,
+        /(show|get|tell)\s+me\s+the\s+time/i,
+        /time\s+zone\s+for\s+([a-zA-Z\s]+)/i,
+        /convert\s+time\s+to\s+([a-zA-Z\s]+)/i,
+        /clock|current\s+time|time\s+now/i
+      ],
+      confidence: 0.95
+    },
+    {
       name: 'web_search',
       patterns: [
         /search.*?for\s+(.+)/i,
@@ -795,6 +831,7 @@ function mapCapabilities(intent: any, entities: any) {
     'cryptocurrency_price_query': ['crypto_price', 'market_data'],
     'stock_price_query': ['stock_price', 'market_data'],
     'book_query': ['book_summary', 'literature_analysis', 'author_info'],
+    'time_query': ['get_current_time', 'convert_time', 'timezone_lookup'],
     'web_search': ['web_search', 'content_retrieval'],
     'translation': ['text_translation', 'language_detection']
   };
@@ -808,6 +845,7 @@ function classifyCategory(intent: any) {
     'cryptocurrency_price_query': 'Finance',
     'stock_price_query': 'Finance',
     'book_query': 'Literature',
+    'time_query': 'Time',
     'web_search': 'Search',
     'translation': 'Language'
   };
@@ -821,6 +859,7 @@ function determineExecutionStrategy(intent: any, query: string) {
     'cryptocurrency_price_query',
     'stock_price_query',
     'book_query',
+    'time_query',
     'translation',
     'web_search'
   ];
@@ -945,6 +984,28 @@ async function findBestServer(parseResult: any, servers: any[]) {
       );
 
       return hasCryptoCapability || hasCryptoCategory;
+    }
+
+    // For time queries, look for time/clock servers
+    if (intent === 'time_query') {
+      const hasTimeCapability = server.capabilities?.some((cap: string) =>
+        cap.toLowerCase().includes('time') ||
+        cap.toLowerCase().includes('clock') ||
+        cap.toLowerCase().includes('timezone') ||
+        cap.toLowerCase().includes('convert_time') ||
+        cap.toLowerCase().includes('get_current_time')
+      );
+      const hasTimeCategory = server.categories?.some((cat: any) =>
+        cat.mainCategory?.toLowerCase().includes('time') ||
+        cat.subCategory?.toLowerCase().includes('time') ||
+        cat.mainCategory?.toLowerCase().includes('utility') ||
+        cat.subCategory?.toLowerCase().includes('utility')
+      );
+      const hasTimeInName = server.name.toLowerCase().includes('time') ||
+                           server.name.toLowerCase().includes('clock') ||
+                           server.name.toLowerCase().includes('timezone');
+
+      return hasTimeCapability || hasTimeCategory || hasTimeInName;
     }
 
     // For general queries, check capabilities match
